@@ -13,7 +13,7 @@
       "binding": "DB",
       "database_name": "paletto-auto",
       // ⬇️ Remplacez par l'ID de votre base D1 (Cloudflare → D1 → paletto-auto → Database ID)
-      "database_id": "COLLER-ICI-L-ID-DE-LA-BASE"
+      "database_id": "7ccb37a9-5011-497f-8be7-0c2a00ccf4cf"
     }
   ]
 }
