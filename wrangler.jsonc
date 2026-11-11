@@ -1,0 +1,19 @@
+{
+  // Configuration Cloudflare Workers pour l'intranet Paletto Auto
+  "name": "paletto-auto",
+  "main": "src/index.js",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "paletto-auto",
+      // ⬇️ Remplacez par l'ID de votre base D1 (Cloudflare → D1 → paletto-auto → Database ID)
+      "database_id": "COLLER-ICI-L-ID-DE-LA-BASE"
+    }
+  ]
+}

@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#060b12">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="description" content="Paletto Auto — Concessionnaire automobile à Los Santos.">
+  <title>Paletto Auto | Concessionnaire</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23060b11'/%3E%3Crect x='6' y='6' width='52' height='52' fill='none' stroke='%23376096' stroke-width='3'/%3E%3Ctext x='32' y='42' text-anchor='middle' font-family='Georgia,serif' font-size='24' fill='%23a5c4e9'%3EPA%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/style.css?v=1">
+</head>
+<body>
+  <!-- ============ VITRINE PUBLIQUE ============ -->
+  <div id="publicSite" class="public hidden">
+    <header class="pub-header">
+      <a class="brand" href="#top" data-pub-top><span class="brand-mark">PA</span><span><b>PALETTO AUTO</b><small>CONCESSIONNAIRE</small></span></a>
+      <nav class="pub-nav"><a href="#evenements" id="pubNavEvents" class="hidden">Événements</a><a href="#recrutement" id="pubNavJobs" class="hidden">Recrutement</a><a href="#contact">Contact</a></nav>
+      <button class="btn btn-primary" id="publicLoginBtn">Espace employé <span>→</span></button>
+    </header>
+    <section class="pub-hero" id="top">
+      <div class="pub-hero-inner">
+        <p class="eyebrow"><i></i> CONCESSIONNAIRE AUTOMOBILE • LOS SANTOS</p>
+        <h1>La voiture de vos rêves<br><em>vous attend.</em></h1>
+        <p class="pub-lead" id="pubMessage">Véhicules de prestige, conseils personnalisés et essais : nos vendeurs vous accompagnent du choix jusqu'à la remise des clés.</p>
+        <div class="pub-cta"><button class="btn btn-primary" data-pub-rdv="">Prendre rendez-vous</button><a class="btn btn-quiet" href="#contact">Nous contacter</a></div>
+      </div>
+    </section>
+    <section class="pub-section hidden" id="biens">
+      <div class="pub-head">
+        <div><p class="section-kicker">NOTRE CATALOGUE</p><h2>Nos biens<span class="emerald">.</span></h2></div>
+        <div class="pub-mode" id="pubMode"><button class="chip active" data-pub-mode="all">Tout</button><button class="chip" data-pub-mode="vente">À vendre</button><button class="chip" data-pub-mode="location">À louer</button></div>
+      </div>
+      <div class="filters" id="pubCats"></div>
+      <div class="pub-grid" id="pubGrid"><div class="empty-state">Chargement du catalogue…</div></div>
+    </section>
+    <section class="pub-section hidden" id="evenements">
+      <div class="pub-head"><div><p class="section-kicker">AGENDA</p><h2>Événements à venir<span class="emerald">.</span></h2></div></div>
+      <div class="pub-events" id="pubEvents"></div>
+    </section>
+    <section class="pub-section hidden" id="recrutement">
+      <div class="pub-jobs"><div><p class="section-kicker">RECRUTEMENT</p><h2>Paletto Auto recrute<span class="emerald">.</span></h2><p class="muted" id="pubJobsText">Vous avez le sens du contact et la passion de l'automobile ? Rejoignez la concession de référence de Los Santos.</p></div>
+        <button class="btn btn-primary" data-pub-apply>Postuler <span>→</span></button></div>
+    </section>
+    <section class="pub-contact" id="contact">
+      <div><p class="section-kicker">CONTACT</p><h2>Un projet ? Parlons-en<span class="emerald">.</span></h2><p class="muted">Nos vendeurs vous accompagnent dans le choix et l'achat de votre véhicule.</p><button class="btn btn-primary pub-rdv-btn" data-pub-rdv="">Prendre rendez-vous</button></div>
+      <div class="pub-contact-cards" id="pubContact"></div>
+    </section>
+    <footer class="pub-footer"><span>© Paletto Auto</span><button class="link-btn" data-pub-login>Espace employé</button></footer>
+  </div>
+
+  <!-- ============ CONNEXION / INSTALLATION ============ -->
+  <div id="loginScreen" class="login-screen hidden">
+    <div class="login-art">
+      <div class="login-art-overlay"></div>
+      <div class="login-brand"><span class="brand-mark">PA</span><span><b>PALETTO AUTO</b><small>CONCESSIONNAIRE</small></span></div>
+      <div class="login-message"><p class="eyebrow"><i></i> ESPACE PROFESSIONNEL</p><h1>L'excellence<br><em>en interne.</em></h1><p>Le centre de pilotage de votre concession automobile à Los Santos.</p></div>
+      <div class="login-foot">CONFIDENTIEL • ACCÈS RÉSERVÉ AUX EMPLOYÉS</div>
+    </div>
+    <div class="login-panel">
+      <div class="login-panel-inner">
+        <button class="back-link" id="backToPublic" type="button">← Retour au catalogue</button>
+        <div class="mobile-brand"><span class="brand-mark">PA</span><span><b>PALETTO AUTO</b><small>CONCESSIONNAIRE</small></span></div>
+
+        <div id="loginBlock">
+          <p class="section-kicker">PORTAIL SÉCURISÉ</p>
+          <h2>Bienvenue<span class="emerald">.</span></h2>
+          <p class="muted">Connectez-vous à votre espace de travail.</p>
+          <form id="loginForm">
+            <label>Identifiant<input id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Votre identifiant" required></label>
+            <label>Mot de passe<input id="password" name="password" type="password" autocomplete="current-password" placeholder="Votre mot de passe" required></label>
+            <p id="loginError" class="error" role="alert"></p>
+            <button class="btn btn-primary full" type="submit">Se connecter <span>→</span></button>
+          </form>
+          <p class="login-help">Mot de passe oublié ? Demandez à votre Directeur de le réinitialiser.</p>
+        </div>
+
+        <div id="setupBlock" class="hidden">
+          <p class="section-kicker">PREMIÈRE INSTALLATION</p>
+          <h2>Créer le compte<span class="emerald">.</span></h2>
+          <p class="muted">Aucun compte n'existe encore. Créez le compte <b>Directeur</b> : il pourra ensuite créer les comptes des employés. Ce formulaire disparaît définitivement après cette étape.</p>
+          <form id="setupForm">
+            <label>Nom affiché (nom RP)<input name="display_name" maxlength="60" placeholder="ex. Jean Dupont" required></label>
+            <label>Identifiant de connexion<input name="username" autocomplete="username" autocapitalize="none" spellcheck="false" minlength="3" maxlength="32" pattern="[A-Za-z0-9._\-]+" placeholder="ex. jean.dupont" required></label>
+            <label>Mot de passe<input name="password" type="password" autocomplete="new-password" minlength="8" placeholder="8 caractères minimum" required></label>
+            <label>Confirmer le mot de passe<input name="confirm" type="password" autocomplete="new-password" minlength="8" placeholder="Retapez le mot de passe" required></label>
+            <p id="setupError" class="error" role="alert"></p>
+            <button class="btn btn-primary full" type="submit">Créer le compte Directeur <span>→</span></button>
+          </form>
+        </div>
+
+        <div class="login-security"><span class="secure-dot"></span> Connexion sécurisée • Personnel autorisé uniquement</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ APPLICATION ============ -->
+  <div id="app" class="app hidden">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand sidebar-brand" href="#" data-page="dashboard"><span class="brand-mark">PA</span><span><b>PALETTO AUTO</b><small>CONCESSIONNAIRE</small></span></a>
+      <div class="side-label">ESPACE DE TRAVAIL</div>
+      <nav class="side-nav">
+        <button class="side-link" data-page="dashboard"><span class="side-icon">▦</span> Tableau de bord</button>
+        <button class="side-link" data-page="ventes"><span class="side-icon">◈</span> Ventes</button>
+        <button class="side-link" data-page="clients"><span class="side-icon">♙</span> Clients</button>
+        <button class="side-link" data-page="partenariats"><span class="side-icon">◇</span> Partenariats</button>
+        <button class="side-link hidden" id="requestsNav" data-page="requests"><span class="side-icon">✉</span> Demandes <span class="nav-badge hidden" id="requestsBadge"></span></button>
+      </nav>
+      <div class="side-label">PILOTAGE</div>
+      <nav class="side-nav">
+        <button class="side-link" data-page="events"><span class="side-icon">✦</span> Événements</button>
+        <button class="side-link" data-page="ca"><span class="side-icon">$</span> Chiffre d'affaires</button>
+        <button class="side-link hidden" id="depensesNav" data-page="depenses"><span class="side-icon">↘</span> Dépenses</button>
+        <button class="side-link hidden" id="usersNav" data-page="users"><span class="side-icon">♧</span> Employés</button>
+        <button class="side-link hidden" id="journalNav" data-page="journal"><span class="side-icon">☰</span> Journal d'activité</button>
+        <button class="side-link hidden" id="gradesNav" data-page="grades"><span class="side-icon">★</span> Grades &amp; permissions</button>
+        <button class="side-link" data-page="account"><span class="side-icon">⚙</span> Mon compte</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="sidebar-status"><span class="secure-dot"></span><span>Système opérationnel<small id="syncLabel">INTRANET PALETTO AUTO</small></span></div>
+        <a class="logout-btn" href="/?vitrine" target="_blank" rel="noopener">↗ Voir la vitrine publique</a>
+        <button id="logoutBtn" class="logout-btn">↪ Déconnexion</button>
+      </div>
+    </aside>
+    <div class="sidebar-scrim" id="sidebarScrim"></div>
+
+    <main class="main">
+      <header class="topbar">
+        <button id="mobileMenu" class="mobile-menu" aria-label="Ouvrir le menu">☰</button>
+        <div class="breadcrumb">PALETTO AUTO <span>/</span> <b id="crumb">TABLEAU DE BORD</b></div>
+        <button class="top-user" data-page="account" title="Mon compte"><div class="top-user-meta"><b id="topUsername">Employé</b><small id="topGrade">Agent</small></div><div class="avatar" id="avatar">D</div></button>
+      </header>
+
+      <!-- Tableau de bord -->
+      <section class="page" id="page-dashboard">
+        <div class="welcome-row"><div><p class="section-kicker">VOTRE ESPACE DE PILOTAGE</p><h1 id="welcomeTitle">Tableau de bord<span class="emerald">.</span></h1><p class="muted">Suivez l'activité de Paletto Auto en un seul endroit.</p></div><div class="date-chip" id="todayDate"></div></div>
+        <div class="stats-grid">
+          <button class="stat-card highlight" data-page="ca"><div class="stat-top"><span>CA DE LA SEMAINE</span><span class="stat-icon">$</span></div><strong id="statCA">—</strong><small id="statCASub">Ventes encaissées</small><div id="statCAProgress"></div></button>
+          <button class="stat-card" data-page="ventes"><div class="stat-top"><span>VENTES DE LA SEMAINE</span><span class="stat-icon">◈</span></div><strong id="statVentes">—</strong><small id="statVentesSub">Cette semaine</small></button>
+          <button class="stat-card hidden" data-page="locations"><div class="stat-top"><span>LOCATIONS DE LA SEMAINE</span><span class="stat-icon">⌑</span></div><strong id="statLocations">—</strong><small id="statLocSub">—</small></button>
+          <button class="stat-card" data-page="clients"><div class="stat-top"><span>CLIENTS RÉFÉRENCÉS</span><span class="stat-icon">♙</span></div><strong id="statClients">—</strong><small id="statPartners">Base clients</small></button>
+        </div>
+        <div class="dashboard-grid">
+          <section class="panel"><div class="panel-heading"><div><p class="section-kicker">ACTIVITÉ RÉCENTE</p><h3>Derniers dossiers</h3></div><span class="live-pill"><i></i> EN DIRECT</span></div><div id="recentList" class="recent-list"><div class="empty-state">Chargement des données…</div></div></section>
+          <section class="panel quick-panel">
+            <p class="section-kicker">ACCÈS RAPIDE</p><h3>Que souhaitez-vous faire ?</h3>
+            <button class="quick-action" data-quick="ventes"><span>＋</span><span><b>Enregistrer une vente</b><small>Ajouter un nouveau dossier de vente</small></span><strong>→</strong></button>
+            
+            <button class="quick-action" data-quick="clients"><span>＋</span><span><b>Ajouter un client</b><small>Compléter votre portefeuille</small></span><strong>→</strong></button>
+            <button class="quick-action" data-quick="partenariats"><span>＋</span><span><b>Nouveau partenariat</b><small>Enregistrer un accord professionnel</small></span><strong>→</strong></button>
+            <div class="my-ca hidden" id="dashAccount"><div class="my-ca-row"><span>Solde du compte</span><b id="dashSolde">—</b></div></div>
+            <div class="my-ca"><div class="my-ca-row"><span>Mon CA cette semaine</span><b id="myCA">—</b></div><div id="myCAProgress"></div></div>
+          </section>
+        </div>
+      </section>
+
+      <!-- Dossiers (ventes, clients, locations, partenariats) -->
+      <section class="page" id="page-records">
+        <div class="page-heading"><div><p class="section-kicker" id="recordsKicker">GESTION COMMERCIALE</p><h1 id="recordsTitle">Ventes<span class="emerald">.</span></h1><p class="muted" id="recordsDescription"></p></div><button class="btn btn-primary" id="addRecordBtn">＋ Nouveau dossier</button></div>
+        <div class="toolbar">
+          <div class="search-box">⌕ <input id="recordSearch" type="search" placeholder="Rechercher dans les dossiers…"></div>
+          <div class="toolbar-right"><label class="toggle hidden" id="mineToggle"><input type="checkbox" id="mineOnly"> Mes dossiers</label><span id="recordCount" class="muted small"></span></div>
+        </div>
+        <div class="filters" id="statusFilters"></div>
+        <div id="recordsTotal" class="records-total hidden"></div>
+        <div id="recordsList" class="records-list"></div>
+      </section>
+
+      <!-- Catalogue des biens -->
+      <section class="page" id="page-catalog">
+        <div class="page-heading"><div><p class="section-kicker">TARIFS DE L'AGENCE</p><h1>Catalogue des biens<span class="emerald">.</span></h1><p class="muted" id="catalogDescription"></p></div><div class="heading-actions"><button class="btn btn-primary hidden" id="addCatalogBtn">＋ Nouveau bien</button></div></div>
+        <div class="filters" id="catalogTabs"></div>
+        <div id="catalogList" class="records-list"></div>
+      </section>
+
+      <!-- Chiffre d'affaires -->
+      <section class="page" id="page-ca">
+        <div class="page-heading"><div><p class="section-kicker">PILOTAGE FINANCIER</p><h1>Chiffre d'affaires<span class="emerald">.</span></h1><p class="muted" id="caPeriod">Période en cours.</p></div><div class="heading-actions"><button class="btn btn-quiet hidden" id="objectivesBtn">🎯 Objectifs</button><button class="btn btn-danger hidden" id="resetCaBtn">⟲ Clôturer la semaine</button></div></div>
+        <div class="ca-hero">
+          <div class="ca-total"><span class="section-kicker">CA TOTAL DE LA PÉRIODE</span><strong id="caTotal">—</strong><small id="caCount"></small><div id="caProgress"></div></div>
+          <div class="ca-split">
+            <div><span>Ventes</span><b id="caVentes">—</b></div>
+            <div class="hidden"><span>Locations</span><b id="caLocations">—</b></div>
+            <div class="mine"><span>Mon CA</span><b id="caMine">—</b><div id="caMineProgress"></div></div>
+          </div>
+        </div>
+        <div class="ca-profit hidden" id="caProfit">
+          <div><span>Dépenses de la période</span><b id="caDepenses">—</b><small id="caDepensesCount"></small></div>
+          <div class="benefice"><span>Bénéfice net (CA − dépenses)</span><b id="caBenefice">—</b><small>Ce qui reste réellement à l'entreprise</small></div>
+          <div class="account"><span>Solde du compte</span><b id="caSolde">—</b><small id="caSoldeSub"></small><button class="mini-btn hidden" id="soldeBtn">Définir le solde</button></div>
+        </div>
+        <p class="hint">Le CA compte <b>toutes les ventes enregistrées</b> (prix final après remise), attribuées au vendeur responsable.</p>
+        <section class="panel hidden" id="caChartPanel">
+          <div class="panel-heading"><div><p class="section-kicker">ÉVOLUTION</p><h3>CA par semaine</h3></div></div>
+          <div id="caChart" class="chart-wrap"></div>
+        </section>
+        <section class="panel hidden" id="caTeamPanel">
+          <div class="panel-heading"><div><p class="section-kicker">CLASSEMENT DE L'ÉQUIPE</p><h3>CA par employé</h3></div></div>
+          <div class="table-wrap"><table class="rank-table"><thead><tr><th>#</th><th>Employé</th><th class="num">Ventes</th><th class="num">Dossiers</th><th class="num">Total</th></tr></thead><tbody id="caTable"></tbody></table></div>
+        </section>
+        <section class="panel hidden" id="caArchivesPanel">
+          <div class="panel-heading"><div><p class="section-kicker">HISTORIQUE</p><h3>Semaines clôturées</h3></div></div>
+          <div id="caArchives" class="archives"></div>
+        </section>
+      </section>
+
+      <!-- Employés -->
+      <section class="page" id="page-users">
+        <div class="page-heading"><div><p class="section-kicker">ADMINISTRATION</p><h1>Gestion des employés<span class="emerald">.</span></h1><p class="muted" id="usersDescription">Gérez les accès et les niveaux de responsabilité.</p></div><button class="btn btn-primary hidden" id="addUserBtn">＋ Nouvel employé</button></div>
+        <div class="grade-legend" id="gradeLegend"></div>
+        <div id="usersList" class="records-list"></div>
+      </section>
+
+      <!-- Demandes reçues -->
+      <section class="page" id="page-requests">
+        <div class="page-heading"><div><p class="section-kicker">RELATION CLIENT</p><h1>Demandes reçues<span class="emerald">.</span></h1><p class="muted">Rendez-vous et candidatures envoyés depuis la vitrine publique.</p></div></div>
+        <div class="filters" id="reqKinds"></div>
+        <div class="filters" id="reqFilters"></div>
+        <div id="requestsList" class="records-list"></div>
+      </section>
+
+      <!-- Événements -->
+      <section class="page" id="page-events">
+        <div class="page-heading"><div><p class="section-kicker">ANIMATION</p><h1>Événements<span class="emerald">.</span></h1><p class="muted" id="eventsDescription">Les événements à venir s'affichent sur la vitrine publique.</p></div><div class="heading-actions"><button class="btn btn-quiet hidden" id="vitrineBtn">⚙ Réglages de la vitrine</button><button class="btn btn-primary hidden" id="addEventBtn">＋ Nouvel événement</button></div></div>
+        <div id="eventsList" class="records-list"></div>
+      </section>
+
+      <!-- Journal d'activité -->
+      <section class="page" id="page-journal">
+        <div class="page-heading"><div><p class="section-kicker">CONTRÔLE</p><h1>Journal d'activité<span class="emerald">.</span></h1><p class="muted">Toutes les créations, modifications et suppressions, avec leur auteur. L'historique est conservé 4 mois.</p></div></div>
+        <div class="toolbar"><div class="search-box">⌕ <input id="journalSearch" type="search" placeholder="Rechercher (bien, client, montant…)"></div>
+          <div class="toolbar-right"><select id="journalUser" class="filter-select"></select><select id="journalType" class="filter-select"></select></div></div>
+        <div id="journalList" class="log-list"></div>
+        <button class="btn btn-quiet hidden" id="journalMore">Afficher plus</button>
+      </section>
+
+      <!-- Grades & permissions -->
+      <section class="page" id="page-grades">
+        <div class="page-heading"><div><p class="section-kicker">ADMINISTRATION</p><h1>Grades &amp; permissions<span class="emerald">.</span></h1><p class="muted">Créez vos grades, choisissez ce que chacun a le droit de faire et rangez-les par ordre hiérarchique. Tout le monde peut consulter les dossiers ; le grade Directeur a toujours tous les droits.</p></div><button class="btn btn-primary" id="addGradeBtn">＋ Nouveau grade</button></div>
+        <div id="gradesList" class="records-list"></div>
+      </section>
+
+      <!-- Mon compte -->
+      <section class="page" id="page-account">
+        <div class="page-heading"><div><p class="section-kicker">PROFIL</p><h1>Mon compte<span class="emerald">.</span></h1><p class="muted">Vos informations et votre mot de passe.</p></div></div>
+        <div class="account-grid">
+          <section class="panel"><p class="section-kicker">INFORMATIONS</p><h3 id="accName">—</h3><dl class="info-list"><dt>Identifiant</dt><dd id="accUser">—</dd><dt>Grade</dt><dd id="accGrade">—</dd><dt>Vos droits</dt><dd id="accRights">—</dd></dl><button class="btn btn-quiet acc-profile-btn" data-profile-open="me">Ma fiche employé (infos RP et carte d'identité)</button></section>
+          <section class="panel"><p class="section-kicker">SÉCURITÉ</p><h3>Changer de mot de passe</h3>
+            <form id="passwordForm" class="stack-form">
+              <label>Mot de passe actuel<input name="current" type="password" autocomplete="current-password" required></label>
+              <label>Nouveau mot de passe<input name="next" type="password" autocomplete="new-password" minlength="8" placeholder="8 caractères minimum" required></label>
+              <label>Confirmer le nouveau mot de passe<input name="confirm" type="password" autocomplete="new-password" minlength="8" required></label>
+              <p id="passwordError" class="error" role="alert"></p>
+              <button class="btn btn-primary" type="submit">Mettre à jour</button>
+            </form>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ============ FENÊTRES ============ -->
+  <div class="modal-backdrop hidden" id="clientModal"><div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="clientName">
+    <div class="modal-head"><div><p class="section-kicker">FICHE CLIENT</p><h2 id="clientName"></h2></div><button class="close-modal" data-close="clientModal" aria-label="Fermer">×</button></div>
+    <div id="clientBody"></div>
+    <div class="modal-actions"><span class="spacer"></span><button type="button" class="btn btn-quiet" data-close="clientModal">Fermer</button><button type="button" class="btn btn-primary" id="clientEditBtn">Modifier la fiche</button></div>
+  </div></div>
+
+  <div class="modal-backdrop hidden" id="soldeModal"><div class="modal modal-small" role="dialog" aria-modal="true" aria-labelledby="soldeTitle">
+    <div class="modal-head"><div><p class="section-kicker">COMPTE DE L'ENTREPRISE</p><h2 id="soldeTitle">Solde du compte</h2></div><button class="close-modal" data-close="soldeModal" aria-label="Fermer">×</button></div>
+    <form id="soldeForm" class="stack-form">
+      <label>Montant actuellement sur le compte ($)<input name="montant" type="number" step="1" inputmode="numeric" placeholder="ex. 2500000" required></label>
+      <p class="modal-meta">Indiquez l'argent <b>réellement disponible maintenant</b> sur le compte de l'entreprise. À partir de cet instant, chaque vente et location enregistrée s'y ajoute et chaque dépense s'en déduit. Vous pouvez recaler ce montant à tout moment (après un retrait ou un dépôt fait en jeu, par exemple).</p>
+      <p id="soldeError" class="error" role="alert"></p>
+      <div class="modal-actions"><span class="spacer"></span><button type="button" class="btn btn-quiet" data-close="soldeModal">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
+    </form>
+  </div></div>
+
+  <div class="modal-backdrop hidden" id="vitrineModal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="vitrineTitle">
+    <div class="modal-head"><div><p class="section-kicker">SITE PUBLIC</p><h2 id="vitrineTitle">Réglages de la vitrine</h2></div><button class="close-modal" data-close="vitrineModal" aria-label="Fermer">×</button></div>
+    <form id="vitrineForm" class="stack-form">
+      <label>Message d'accueil<textarea name="message" rows="3" maxlength="400" placeholder="ex. Véhicules de prestige, essais et conseils personnalisés."></textarea></label>
+      <label>Téléphone de la concession<input name="tel" maxlength="40" placeholder="ex. 555-0808"></label>
+      <label>Adresse de la concession<input name="adresse" maxlength="120" placeholder="ex. Alta Street, Los Santos"></label>
+      <label class="check-line"><input type="checkbox" name="recrutement"> Recrutement ouvert (affiche la section « Paletto Auto recrute » et le formulaire de candidature)</label>
+      <label>Texte de la section recrutement<textarea name="recrutementMessage" rows="3" maxlength="600" placeholder="ex. Nous recherchons des vendeurs motivés, disponibles en soirée…"></textarea></label>
+      <p class="modal-meta">Ces informations apparaissent sur la page d'accueil publique. </p>
+      <p id="vitrineError" class="error" role="alert"></p>
+      <div class="modal-actions"><a class="btn btn-quiet" href="/?vitrine" target="_blank" rel="noopener">Voir la vitrine ↗</a><span class="spacer"></span><button type="button" class="btn btn-quiet" data-close="vitrineModal">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
+    </form>
+  </div></div>
+
+  <div class="modal-backdrop hidden" id="rdvModal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="rdvTitle">
+    <div class="modal-head"><div><p class="section-kicker">PALETTO AUTO</p><h2 id="rdvTitle">Prendre rendez-vous</h2></div><button class="close-modal" data-close="rdvModal" aria-label="Fermer">×</button></div>
+    <form id="rdvForm" class="form-grid"><input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <label><span>Nom et prénom <i class="req">*</i></span><input name="nom" maxlength="60" required placeholder="Votre nom en ville"></label>
+      <label><span>Téléphone <i class="req">*</i></span><input name="telephone" maxlength="30" required placeholder="ex. 555-0123"></label>
+      <label>Votre demande<select name="objet"><option>Achat</option><option>Essai</option><option>Reprise</option><option>Autre</option></select></label>
+      <label>Véhicule recherché<input name="bien" maxlength="120" list="pubBienOptions" placeholder="Facultatif"></label>
+      <label class="full-field">Vos disponibilités<input name="disponibilites" maxlength="200" placeholder="ex. en semaine après 21h"></label>
+      <label class="full-field">Message<textarea name="message" rows="3" maxlength="800" placeholder="Modèle souhaité, budget, reprise de votre véhicule…"></textarea></label>
+      <p id="rdvError" class="error full-field" role="alert"></p>
+      <div class="modal-actions full-field"><span class="spacer"></span><button type="button" class="btn btn-quiet" data-close="rdvModal">Annuler</button><button class="btn btn-primary" type="submit">Envoyer la demande</button></div>
+    </form>
+    <datalist id="pubBienOptions"></datalist>
+    <div class="form-done hidden" id="rdvDone"><b>Demande envoyée.</b><p class="muted">Un vendeur de Paletto Auto vous recontactera au numéro indiqué.</p><button class="btn btn-primary" data-close="rdvModal">Fermer</button></div>
+  </div></div>
+
+  <div class="modal-backdrop hidden" id="candModal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="candTitle">
+    <div class="modal-head"><div><p class="section-kicker">RECRUTEMENT</p><h2 id="candTitle">Postuler chez Paletto Auto</h2></div><button class="close-modal" data-close="candModal" aria-label="Fermer">×</button></div>
+    <form id="candForm" class="form-grid"><input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <label><span>Nom et prénom (RP) <i class="req">*</i></span><input name="nom" maxlength="60" required></label>
+      <label>Âge (RP)<input name="age" maxlength="10" inputmode="numeric"></label>
+      <label><span>Téléphone en jeu <i class="req">*</i></span><input name="telephone" maxlength="30" required placeholder="ex. 555-0123"></label>
+      <label>Pseudo Discord (HRP)<input name="discord" maxlength="60"></label>
+      <label class="full-field">Disponibilités<input name="disponibilites" maxlength="200" placeholder="ex. tous les soirs de 20h à minuit"></label>
+      <label class="full-field">Expérience<textarea name="experience" rows="3" maxlength="1200" placeholder="Métiers exercés en ville, expérience dans la vente ou l'automobile…"></textarea></label>
+      <label class="full-field"><span>Motivation <i class="req">*</i></span><textarea name="motivation" rows="4" maxlength="1500" required placeholder="Pourquoi Paletto Auto ?"></textarea></label>
+      <p id="candError" class="error full-field" role="alert"></p>
+      <div class="modal-actions full-field"><span class="spacer"></span><button type="button" class="btn btn-quiet" data-close="candModal">Annuler</button><button class="btn btn-primary" type="submit">Envoyer ma candidature</button></div>
+    </form>
+    <div class="form-done hidden" id="candDone"><b>Candidature envoyée.</b><p class="muted">Merci ! La direction étudiera votre candidature et vous recontactera.</p><button class="btn btn-primary" data-close="candModal">Fermer</button></div>
+  </div></div>
+
+  <div class="modal-backdrop hidden" id="eventModal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="eventTitle">
+    <div class="modal-head"><div><p class="section-kicker">ÉVÉNEMENT</p><h2 id="eventTitle">Nouvel événement</h2></div><button class="close-modal" data-close="eventModal" aria-label="Fermer">×</button></div>
+    <form id="eventForm" class="form-grid">
+      <label class="full-field"><span>Titre <i class="req">*</i></span><input name="titre" maxlength="100" required placeholder="ex. Journée portes ouvertes"></label>
+      <label><span>Date et heure <i class="req">*</i></span><input name="date" type="datetime-local" required></label>
+      <label>Lieu<input name="lieu" maxlength="120" placeholder="ex. Concession, Popular Street"></label>
+      <label class="full-field">Description<textarea name="description" rows="3" maxlength="800" placeholder="Programme, véhicules présentés, invités…"></textarea></label>
+      <p id="eventError" class="error full-field" role="alert"></p>
+      <div class="modal-actions full-field"><span class="spacer"></span><button type="button" class="btn btn-quiet" data-close="eventModal">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
+    </form>
+  </div></div>
+
+  <div class="modal-backdrop hidden" id="profileModal"><div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="profileTitle">
+    <div class="modal-head"><div><p class="section-kicker">FICHE EMPLOYÉ</p><h2 id="profileTitle">Fiche</h2><p class="muted small" id="profileSub"></p></div><button class="close-modal" data-close="profileModal" aria-label="Fermer">×</button></div>
+    <form id="profileForm" class="form-grid">
+      <label>Date de naissance (RP)<input name="naissance" maxlength="40" placeholder="ex. 14/03/1994"></label>
+      <label>Téléphone en jeu<input name="telephone" maxlength="30" placeholder="ex. 555-0123"></label>
+      <label>Date d'embauche<input name="embauche" maxlength="40" placeholder="ex. 09/11/2026"></label>
+      <label>Adresse (RP)<input name="adresse" maxlength="120" placeholder="ex. Del Perro Heights, apt 7"></label>
+      <label class="full-field" id="profileNotesField">Notes internes (visibles par la direction uniquement)<textarea name="notes" rows="3" maxlength="2000" placeholder="Sanctions, félicitations, remarques…"></textarea></label>
+      <div class="full-field photo-field" id="idPhotoField"><span class="photo-label">Carte d'identité RP</span>
+        <div class="photo-box id-box" id="idPhotoBox"><img id="idPhotoPreview" alt="Carte d'identité RP" class="hidden"><span id="idPhotoEmpty">Aucune carte enregistrée. Ajoutez une capture d'écran de la carte d'identité du personnage en jeu.</span></div>
+        <div class="photo-actions"><label class="btn btn-quiet file-btn">📷 Ajouter la carte<input type="file" id="idPhotoInput" accept="image/jpeg,image/png,image/webp" hidden></label><button type="button" class="btn btn-danger-quiet hidden" id="idPhotoRemove">Retirer la carte</button></div>
+        <small class="muted small">Uniquement la carte du personnage en jeu, jamais une vraie pièce d'identité. Visible seulement par l'employé et la direction.</small>
+      </div>
+      <p id="profileError" class="error full-field" role="alert"></p>
+      <div class="modal-actions full-field"><span class="spacer"></span><button type="button" class="btn btn-quiet" data-close="profileModal">Fermer</button><button class="btn btn-primary" type="submit" id="profileSaveBtn">Enregistrer</button></div>
+    </form>
+  </div></div>
+
+  <div class="modal-backdrop hidden" id="objectivesModal"><div class="modal modal-small" role="dialog" aria-modal="true" aria-labelledby="objectivesTitle">
+    <div class="modal-head"><div><p class="section-kicker">CHIFFRE D'AFFAIRES</p><h2 id="objectivesTitle">Objectifs de la semaine</h2></div><button class="close-modal" data-close="objectivesModal" aria-label="Fermer">×</button></div>
+    <form id="objectivesForm" class="stack-form">
+      <label>Objectif de CA de l'entreprise ($)<input name="entreprise" type="number" min="0" step="1" inputmode="numeric" placeholder="ex. 5000000"></label>
+      <label>Objectif de CA par employé ($)<input name="employe" type="number" min="0" step="1" inputmode="numeric" placeholder="ex. 500000"></label>
+      <p class="modal-meta">Laissez vide pour ne pas afficher d'objectif. Les objectifs restent en place d'une semaine à l'autre.</p>
+      <p id="objectivesError" class="error" role="alert"></p>
+      <div class="modal-actions"><span class="spacer"></span><button type="button" class="btn btn-quiet" data-close="objectivesModal">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
+    </form>
+  </div></div>
+
+  <div class="modal-backdrop hidden" id="recordModal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-head"><div><p class="section-kicker" id="modalKicker">NOUVEAU DOSSIER</p><h2 id="modalTitle">Ajouter un dossier</h2></div><button class="close-modal" data-close="recordModal" aria-label="Fermer">×</button></div>
+    <form id="recordForm" novalidate><div id="recordFields" class="form-grid"></div><p id="recordMeta" class="modal-meta"></p><p id="recordError" class="error" role="alert"></p>
+      <div class="modal-actions"><button type="button" class="btn btn-danger-quiet hidden" id="recordDeleteBtn">Supprimer</button><span class="spacer"></span><button type="button" class="btn btn-quiet" data-close="recordModal">Fermer</button><button type="submit" class="btn btn-primary" id="recordSaveBtn">Enregistrer</button></div>
+    </form>
+    <datalist id="clientOptions"></datalist>
+  </div></div>
+
+  <div class="modal-backdrop hidden" id="userModal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="userModalTitle">
+    <div class="modal-head"><div><p class="section-kicker">ADMINISTRATION</p><h2 id="userModalTitle">Créer un employé</h2></div><button class="close-modal" data-close="userModal" aria-label="Fermer">×</button></div>
+    <form id="userForm"><div class="form-grid">
+      <label>Nom affiché (nom RP)<input name="display_name" maxlength="60" placeholder="ex. Jean Dupont" required></label>
+      <label>Identifiant de connexion<input name="username" autocapitalize="none" spellcheck="false" minlength="3" maxlength="32" pattern="[A-Za-z0-9._\-]+" placeholder="ex. jean.dupont" required></label>
+      <label><span id="userPwLabel">Mot de passe</span><input name="password" type="password" autocomplete="new-password" minlength="8" placeholder="8 caractères minimum"></label>
+      <label>Grade<select name="grade"></select></label>
+    </div><p class="modal-meta" id="userHint"></p><p id="userError" class="error" role="alert"></p>
+      <div class="modal-actions"><span class="spacer"></span><button type="button" class="btn btn-quiet" data-close="userModal">Annuler</button><button class="btn btn-primary" type="submit" id="userSaveBtn">Créer le compte</button></div>
+    </form>
+  </div></div>
+
+  <div class="modal-backdrop hidden" id="catalogModal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="catalogModalTitle">
+    <div class="modal-head"><div><p class="section-kicker">CATALOGUE</p><h2 id="catalogModalTitle">Nouveau bien</h2></div><button class="close-modal" data-close="catalogModal" aria-label="Fermer">×</button></div>
+    <form id="catalogForm"><div class="form-grid">
+      <label><span>Catégorie <i class="req">*</i></span><select name="categorie" required><option value="" disabled selected>Choisir…</option><option>Motels</option><option>Appartements</option><option>Penthouses</option><option>Maisons</option><option>Garages</option><option>Bureaux</option><option>Entrepôts</option></select></label>
+      <label><span>Nom du bien <i class="req">*</i></span><input name="nom" maxlength="100" placeholder="ex. Chambre Pink Cage, Villa Vinewood…" required></label>
+      <label>Prix de vente ($)<input name="prix_vente" type="number" min="0" step="1" inputmode="numeric" placeholder="Vide si pas en vente"></label>
+      <label>Prix de location par semaine ($)<input name="prix_location" type="number" min="0" step="1" inputmode="numeric" placeholder="Vide si pas en location"></label>
+      <div class="full-field photo-field"><span class="photo-label">Photo du bien (optionnel)</span>
+        <div class="photo-box"><img id="catalogPhotoPreview" alt="" class="hidden"><span id="catalogPhotoEmpty">Aucune photo</span></div>
+        <div class="photo-actions"><label class="btn btn-quiet file-btn">📷 Choisir une photo<input type="file" id="catalogPhotoInput" accept="image/jpeg,image/png,image/webp" hidden></label><button type="button" class="btn btn-danger-quiet hidden" id="catalogPhotoRemove">Retirer la photo</button></div>
+      </div>
+      <label class="full-field check-line"><input type="checkbox" name="public" checked> Afficher ce bien sur la vitrine publique</label>
+    </div><p class="modal-meta">Le prix de location est <b>par semaine</b> : il est multiplié automatiquement par le nombre de semaines choisi (1 à 6). Laissez un prix vide si le bien n'est pas proposé à la vente ou à la location.</p><p id="catalogError" class="error" role="alert"></p>
+      <div class="modal-actions"><span class="spacer"></span><button type="button" class="btn btn-quiet" data-close="catalogModal">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
+    </form>
+  </div></div>
+
+  <div class="modal-backdrop hidden" id="gradeModal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="gradeModalTitle">
+    <div class="modal-head"><div><p class="section-kicker">GRADE</p><h2 id="gradeModalTitle">Nouveau grade</h2></div><button class="close-modal" data-close="gradeModal" aria-label="Fermer">×</button></div>
+    <form id="gradeForm">
+      <label class="stack-label"><span>Nom du grade <i class="req">*</i></span><input name="name" maxlength="30" placeholder="ex. Agent confirmé, Secrétaire…" required></label>
+      <p class="section-kicker perm-title">PERMISSIONS</p>
+      <div id="gradePerms" class="perm-grid"></div>
+      <p id="gradeError" class="error" role="alert"></p>
+      <div class="modal-actions"><span class="spacer"></span><button type="button" class="btn btn-quiet" data-close="gradeModal">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
+    </form>
+  </div></div>
+
+  <div class="modal-backdrop hidden" id="photoModal"><div class="modal photo-modal" role="dialog" aria-modal="true" aria-labelledby="photoTitle">
+    <div class="modal-head"><div><p class="section-kicker">PHOTO DU BIEN</p><h2 id="photoTitle"></h2></div><button class="close-modal" data-close="photoModal" aria-label="Fermer">×</button></div>
+    <img id="photoFull" alt="">
+    <p class="photo-info hidden" id="photoInfo"></p>
+  </div></div>
+
+  <div class="modal-backdrop hidden" id="confirmModal"><div class="modal modal-small" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <div class="modal-head"><div><p class="section-kicker">CONFIRMATION</p><h2 id="confirmTitle">Êtes-vous sûr ?</h2></div></div>
+    <p class="muted" id="confirmText"></p>
+    <div class="modal-actions"><span class="spacer"></span><button type="button" class="btn btn-quiet" id="confirmCancel">Annuler</button><button type="button" class="btn btn-danger" id="confirmOk">Confirmer</button></div>
+  </div></div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="/assets/app.js?v=1"></script>
+</body>
+</html>
