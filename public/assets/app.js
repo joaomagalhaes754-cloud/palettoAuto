@@ -4,7 +4,7 @@
 const API = "/api";
 const WEEKS = ["1 semaine", "2 semaines", "3 semaines", "4 semaines", "5 semaines", "6 semaines"];
 const weeksOf = (v) => Math.min(6, Math.max(1, parseInt(v, 10) || 1));
-const CATEGORIES = ["Motels", "Appartements", "Penthouses", "Maisons", "Garages", "Bureaux", "Entrepôts"];
+const CATEGORIES = ["Neuf", "Occasion"];
 const catOf = (c) => (CATEGORIES.includes(c.categorie) ? c.categorie : "Non classé");
 // Permissions qu'on peut cocher pour chaque grade
 const PERMS = [
@@ -15,7 +15,7 @@ const PERMS = [
   ["dossiers.attribuer", "Choisir le vendeur responsable", "Sinon, le dossier lui est attribué automatiquement"],
   ["ca.equipe", "Voir le CA de toute l'équipe", "Classement et historique des semaines"],
   ["ca.cloturer", "Clôturer la semaine", "Remise à zéro du CA et gestion de l'historique"],
-  ["catalogue.gerer", "Gérer la vitrine et les événements", "Textes du site public, recrutement, événements"],
+  ["catalogue.gerer", "Gérer les véhicules, la vitrine et les événements", "Liste des prix, occasions en vitrine, textes du site public, événements"],
   ["employes.voir", "Voir la page Employés", "Liste de l'équipe"],
   ["employes.gerer", "Gérer les comptes employés", "Créer, modifier, mots de passe, supprimer"],
   ["grades.gerer", "Gérer les grades", "Créer des grades et choisir leurs permissions"],
@@ -30,10 +30,10 @@ const gradeTag = (g) => `<span class="grade ${gradeClass(g)}">${esc(g)}</span>`;
 
 const TYPES = {
   ventes: {
-    label: "Ventes", singular: "vente", fem: true, kicker: "GESTION COMMERCIALE",
+    label: "Ventes", singular: "vente", fem: true, kicker: "GESTION COMMERCIALE", photo: true,
     desc: "Enregistrez les ventes de véhicules conclues : chacune compte immédiatement dans le CA. Choisissez un partenariat pour appliquer automatiquement sa remise.",
     fields: [
-      { key: "vehicule", label: "Véhicule (modèle)", type: "text", required: true, placeholder: "ex. Pegassi Zentorno", full: true },
+      { key: "vehicule", label: "Véhicule (modèle)", type: "vehicle", required: true, placeholder: "Tapez pour chercher dans la liste…", full: true },
       { key: "plaque", label: "Plaque d'immatriculation", type: "text", placeholder: "ex. 12ABC345" },
       { key: "client", label: "Client", type: "client", placeholder: "Nom du client" },
       { key: "prix_base", label: "Prix de base ($)", type: "money" },
@@ -203,7 +203,7 @@ async function enterApp() {
 }
 
 const canRequests = () => can("rdv.gerer") || can("recrutement.gerer");
-const isValidPage = (p) => (p === "requests" && canRequests()) || ["dashboard", "ca", "account", "events", ...Object.keys(TYPES).filter(typeAllowed)].includes(p) || (p === "journal" && can("journal.voir")) || (p === "users" && canSeeUsers()) || (p === "grades" && can("grades.gerer"));
+const isValidPage = (p) => (p === "requests" && canRequests()) || ["dashboard", "ca", "account", "events", "catalog", ...Object.keys(TYPES).filter(typeAllowed)].includes(p) || (p === "journal" && can("journal.voir")) || (p === "users" && canSeeUsers()) || (p === "grades" && can("grades.gerer"));
 
 // Affiche ou masque les menus et boutons selon les permissions du grade
 function applyPermissions() {
@@ -285,7 +285,7 @@ function go(page, doRender = true) {
   $$(".page").forEach((p) => p.classList.remove("active"));
   $(`#page-${TYPES[page] ? "records" : page}`).classList.add("active");
   $$(".side-link").forEach((b) => b.classList.toggle("active", b.dataset.page === page));
-  const crumbs = { requests: "DEMANDES", events: "ÉVÉNEMENTS", journal: "JOURNAL D'ACTIVITÉ", grades: "GRADES & PERMISSIONS", dashboard: "TABLEAU DE BORD", catalog: "CATALOGUE DES BIENS", ca: "CHIFFRE D'AFFAIRES", users: "EMPLOYÉS", account: "MON COMPTE" };
+  const crumbs = { requests: "DEMANDES", events: "ÉVÉNEMENTS", journal: "JOURNAL D'ACTIVITÉ", grades: "GRADES & PERMISSIONS", dashboard: "TABLEAU DE BORD", catalog: "VÉHICULES", ca: "CHIFFRE D'AFFAIRES", users: "EMPLOYÉS", account: "MON COMPTE" };
   $("#crumb").textContent = crumbs[page] || TYPES[page].label.toUpperCase();
   if (location.hash.slice(1) !== page) history.replaceState(null, "", page === "dashboard" ? location.pathname : `#${page}`);
   closeSidebar();
@@ -317,6 +317,7 @@ function renderDashboard() {
   $("#dashAccount").classList.toggle("hidden", !ca.compte);
   if (ca.compte) $("#dashSolde").textContent = money(ca.compte.solde);
   $("#myCAProgress").innerHTML = progressHTML(ca.mine?.total, ca.objectifs?.employe);
+  $("#myPay").innerHTML = ca.paie ? myPayText(ca.paie) : "";
 
   const all = Object.keys(TYPES).flatMap((t) => (r[t] || []).map((x) => ({ ...x, type: t })))
     .sort((a, b) => b.updated_at - a.updated_at).slice(0, 7);
@@ -377,7 +378,7 @@ function renderRecords() {
   $("#recordsList").innerHTML = filtered.length ? filtered.map((x) => {
     const sub = def.sub(x.data) + (t === "clients" ? (linkedCount(x.data.nom) ? ` • ${linkedCount(x.data.nom)}` : "") : "");
     return `<article class="record-card" data-open="${t}:${x.id}" tabindex="0">
-      <div class="record-main"><div class="record-title"><b>${esc(def.title(x.data))}</b>${x.data.remise && t === "partenariats" ? `<span class="badge ok">Remise ${esc(x.data.remise)} %</span>` : ""}${x.data.liste_noire && t === "clients" ? `<span class="badge bad">⚠ Liste noire</span>` : ""}</div><p>${esc(sub || "Aucun détail")}</p></div>
+      <div class="record-main"><div class="record-title"><b>${esc(def.title(x.data))}</b>${x.data.remise && t === "partenariats" ? `<span class="badge ok">Remise ${esc(x.data.remise)} %</span>` : ""}${x.data.liste_noire && t === "clients" ? `<span class="badge bad">⚠ Liste noire</span>` : ""}${def.photo ? (x.photo_at ? `<span class="badge ok">📷 Capture</span>` : `<span class="badge bad">Capture manquante</span>`) : ""}</div><p>${esc(sub || "Aucun détail")}</p></div>
       <div class="record-meta">
         ${def.amount ? `<strong class="amount">${money(x.data[def.amount])}</strong>` : ""}
         <span title="${hasAgent ? "Agent responsable" : "Créé par"}">${esc(userName(hasAgent ? x.agent : x.created_by))}</span>
@@ -431,6 +432,13 @@ function fieldHTML(f, val, ro, isNew = true) {
       const hint = items.length ? (f.mode === "location" ? "Montant calculé automatiquement : prix par semaine × nombre de semaines (modifiable)." : "Le montant se remplit automatiquement, il reste modifiable.") : (can("catalogue.gerer") ? "Catalogue vide : ajoutez des biens dans « Catalogue des biens »." : "Catalogue vide : demandez à un responsable de le remplir.");
       return `<label class="full-field">${lbl}<select name="${f.key}" data-catalog="${f.mode}" ${dis}><option value="">— Hors catalogue (montant libre) —</option>${opts.join("")}</select>${ro ? "" : `<small class="field-hint">${hint}</small>`}<img class="cat-preview hidden" data-cat-preview alt=""></label>`;
     }
+    case "vehicle": {
+      const items = state.catalog.filter((c) => c.prix_vente > 0);
+      const hint = items.length ? "Choisissez dans la liste : le prix de base se remplit tout seul (modifiable)." : (can("catalogue.gerer") ? "Liste vide : ajoutez les modèles et leurs prix dans « Véhicules »." : "Liste vide : demandez à un responsable de la remplir.");
+      return `<label class="full-field">${lbl}<input name="${f.key}" list="vehicleOptions" maxlength="200" value="${esc(val)}" ${req} ${dis} placeholder="${ph}" autocomplete="off" data-vehicle>
+        <datalist id="vehicleOptions">${items.map((c) => `<option value="${esc(c.nom)}">${esc(c.categorie === "Occasion" ? "Occasion • " : "")}${esc(money(c.prix_vente))}</option>`).join("")}</datalist>
+        ${ro ? "" : `<small class="field-hint" data-vehicle-hint>${hint}</small>`}<img class="cat-preview hidden" data-cat-preview alt=""></label>`;
+    }
     case "client":
       return `<label>${lbl}<input name="${f.key}" list="clientOptions" maxlength="200" value="${esc(val)}" ${dis} placeholder="${ph}" autocomplete="off"><small class="field-warn hidden" data-bl-for="${f.key}"></small></label>`;
     default:
@@ -449,7 +457,14 @@ function openRecord(type, id = null) {
   $("#modalKicker").textContent = rec ? (ro ? "CONSULTATION" : "MODIFICATION") : "NOUVEAU DOSSIER";
   $("#modalTitle").textContent = rec ? def.title(rec.data) : `${def.fem ? "Nouvelle" : "Nouveau"} ${def.singular}`;
   $("#clientOptions").innerHTML = (state.records.clients || []).map((c) => `<option value="${esc(c.data.nom)}">`).join("");
-  $("#recordFields").innerHTML = def.fields.map((f) => fieldHTML(f, rec ? (f.type === "user" ? rec.agent : rec.data[f.key]) : "", ro, !rec)).join("");
+  $("#recordFields").innerHTML = def.fields.map((f) => fieldHTML(f, rec ? (f.type === "user" ? rec.agent : rec.data[f.key]) : "", ro, !rec)).join("") + (def.photo ? recPhotoHTML(ro) : "");
+  state.editing.photo = null;
+  if (def.photo) {
+    setRecPhoto(null, rec ? "Chargement de la capture…" : null);
+    if (rec?.photo_at) api(`records/${type}/${rec.id}/photo`).then((p) => { if (state.editing.id === rec.id && !state.editing.photo) setRecPhoto(p.data); })
+      .catch(() => setRecPhoto(null, "Capture indisponible."));
+    else if (rec) setRecPhoto(null, "Aucune capture enregistrée pour cette vente.");
+  }
   $("#recordMeta").innerHTML = rec
     ? `Créé par <b>${esc(userName(rec.created_by))}</b> le ${dateTime(rec.created_at)}${rec.updated_at !== rec.created_at ? ` • modifié le ${dateTime(rec.updated_at)}` : ""}${rec.closed_at ? ` • comptabilisé dans le CA le ${dateTime(rec.closed_at)}` : ""}${ro ? "<br><i>Lecture seule : vous ne pouvez pas modifier ce dossier.</i>" : ""}`
     : "";
@@ -457,6 +472,8 @@ function openRecord(type, id = null) {
   $$("#recordFields input[list=clientOptions]").forEach(updateBlacklistWarn);
   const catSel = $("#recordFields select[data-catalog]");
   if (catSel) updateCatalogPreview(catSel);
+  const vIn = $("#recordFields input[data-vehicle]");
+  if (vIn && vIn.value) showVehiclePreview(vIn);
   $("#recordSaveBtn").classList.toggle("hidden", ro);
   $("#recordSaveBtn").textContent = rec ? "Enregistrer les modifications" : "Enregistrer le dossier";
   $("#recordDeleteBtn").classList.toggle("hidden", !rec || !canDelete(type));
@@ -480,6 +497,11 @@ async function saveRecord(e) {
   }
   const partnerSel = form.querySelector("select[name=partenariat]");
   if (partnerSel) data.remise = Number(partnerSel.selectedOptions[0]?.dataset.remise) || 0;
+  if (def.photo) {
+    const rec = id ? (state.records[type] || []).find((x) => x.id === id) : null;
+    if (!state.editing.photo && !rec?.photo_at) { $("#recordError").textContent = "Ajoutez la capture d'écran de la vente en jeu : elle est obligatoire."; return; }
+    if (state.editing.photo) data.photo = state.editing.photo;
+  }
   const btn = $("#recordSaveBtn");
   setBusy(btn, true, "Enregistrement…");
   try {
@@ -539,32 +561,53 @@ function renderCA() {
   }
   renderCAChart();
 
-  $("#caTeamPanel").classList.toggle("hidden", !ca.employees);
+  const pay = ca.paie;
+  $("#caMineSalary").innerHTML = pay ? myPayText(pay) : "";
+  $("#caTeamPanel").classList.toggle("hidden", !pay);
   $("#caArchivesPanel").classList.toggle("hidden", !ca.archives);
-  if (!ca.employees) return;
-
-  const rows = [...ca.employees];
-  state.users.forEach((u) => { if (!rows.some((r) => r.agent === u.username)) rows.push({ agent: u.username, total: 0, ventes: 0, locations: 0, count: 0 }); });
-  rows.sort((a, b) => b.total - a.total);
-  const objEmp = state.ca.objectifs?.employe || 0;
-  const max = objEmp || Math.max(1, ...rows.map((r) => r.total));
-  $("#caTable").innerHTML = rows.map((r, i) => {
-    const u = state.users.find((x) => x.username === r.agent);
-    return `<tr class="${r.agent === state.me.username ? "me" : ""}">
-      <td class="rank">${r.total ? i + 1 : "–"}</td>
-      <td><b>${esc(u?.display_name || r.agent || "Non attribué")}</b><small>${esc(u?.grade || "Ancien employé")}</small><div class="bar ${objEmp && r.total >= objEmp ? "done" : ""}"><span style="width:${Math.min(100, (r.total / max) * 100)}%"></span></div>${objEmp ? `<small>${Math.round((r.total / objEmp) * 100)} % de l'objectif</small>` : ""}</td>
-      <td class="num">${money(r.ventes)}</td><td class="num">${r.count}</td><td class="num total">${money(r.total)}</td></tr>`;
-  }).join("");
+  if (pay) renderPay(pay);
+  if (!ca.archives) return;
 
   $("#caArchives").innerHTML = ca.archives.length ? ca.archives.map((a) => `
     <details class="archive">
       <summary><span><b>Du ${dateLabel(a.period_start)} au ${dateLabel(a.period_end)}</b><small>Clôturée par ${esc(userName(a.reset_by))} • ${a.details.count} opération(s)</small></span><strong>${money(a.total)}</strong></summary>
       <div class="archive-body">
         <p class="muted small">Ventes : ${money(a.details.ventes)}${a.details.depenses !== undefined ? ` • Dépenses : ${money(a.details.depenses)} • <b>Bénéfice : ${money(a.details.benefice)}</b>` : ""}</p>
-        ${(a.details.employees || []).map((e) => `<div class="archive-row"><span>${esc(userName(e.agent))}</span><span>${e.count} op.</span><b>${money(e.total)}</b></div>`).join("") || `<p class="muted small">Aucune opération sur cette période.</p>`}
+        ${a.details.paie ? `<p class="muted small">${a.details.paie.best?.length ? `🏆 Meilleur vendeur : <b>${esc(a.details.paie.best.map(userName).join(" & "))}</b> (prime ${money(a.details.paie.prime)}) • ` : ""}Salaires et primes : <b>${money(a.details.paie.totalAVerser)}</b></p>` : ""}
+        ${(a.details.employees || []).map((e) => { const p = a.details.paie?.rows?.find((x) => x.agent === e.agent); return `<div class="archive-row"><span>${esc(userName(e.agent))}${p?.prime ? " 🏆" : ""}</span><span>${e.count} op.</span><b>${money(e.total)}</b>${p ? `<span class="arch-pay">payé ${money(p.aVerser)}</span>` : ""}</div>`; }).join("") || `<p class="muted small">Aucune opération sur cette période.</p>`}
         ${can("ca.cloturer") ? `<button class="mini-btn danger" data-archive-delete="${a.id}">Supprimer cet historique</button>` : ""}
       </div>
     </details>`).join("") : `<div class="empty-state">Aucune semaine clôturée pour l'instant.${can("ca.cloturer") ? " Utilisez « Clôturer la semaine » pour archiver le CA et repartir à zéro." : ""}</div>`;
+}
+
+function myPayText(pay) {
+  const m = pay.mine;
+  if (!m) return "";
+  if (!pay.objectif) return `<small class="pay-mine">Salaire : objectif par employé non défini</small>`;
+  return `<small class="pay-mine">Salaire estimé : <b>${money(m.salaire)}</b>${m.best ? ` + prime <b>${money(pay.prime)}</b> 🏆` : ""}${m.rank ? ` • ${m.rank === 1 ? "1er" : m.rank + "e"} du classement` : ""}</small>`;
+}
+function renderPay(pay) {
+  const mgr = pay.totalAVerser !== undefined;
+  const bestRows = pay.classement.filter((r) => r.best);
+  $("#caBest").innerHTML = bestRows.length
+    ? `<div class="best-seller"><span class="trophy" aria-hidden="true">🏆</span><div><small>MEILLEUR VENDEUR DE LA SEMAINE</small><b>${esc(bestRows.map((r) => userName(r.agent)).join(" & "))}</b><span>${bestRows[0].count} vente${bestRows[0].count > 1 ? "s" : ""}${bestRows[0].total !== undefined ? ` • ${money(bestRows[0].total)} de CA` : ""} • prime de ${money(pay.prime)}${bestRows.length > 1 ? " chacun (égalité)" : ""}</span></div></div>`
+    : `<div class="empty-state">Pas encore de vente cette semaine : le premier vendeur prend la tête du classement et la prime de ${money(pay.prime)}.</div>`;
+  $("#caPayRule").innerHTML = pay.objectif
+    ? `<b>Échelle de salaire</b> : ${money(pay.max)} × (CA du vendeur ÷ objectif de ${money(pay.objectif)}), plafonné à <b>${money(pay.max)}</b> quand l'objectif est atteint. Le meilleur vendeur de la semaine touche <b>${money(pay.prime)}</b> de prime en plus.
+       <div class="pay-scale">${[25, 50, 75, 100].map((p) => `<span><small>${p} % de l'objectif</small>${money(pay.objectif * p / 100)} de CA<b>→ ${money(pay.max * p / 100)}</b></span>`).join("")}</div>`
+    : `Définissez l'<b>objectif de CA par employé</b> (bouton « Objectifs ») pour calculer les salaires : l'atteindre donne le salaire maximum de <b>${money(pay.max)}</b>. Le meilleur vendeur touche <b>${money(pay.prime)}</b> de prime en plus.`;
+  $("#caThead").innerHTML = `<tr><th>#</th><th>Employé</th><th class="num">Ventes</th><th class="num">CA</th>${mgr ? `<th class="num">Salaire</th><th class="num">Prime</th><th class="num">À verser</th>` : ""}</tr>`;
+  $("#caTable").innerHTML = pay.classement.map((r) => {
+    const u = state.users.find((x) => x.username === r.agent);
+    const known = r.total !== undefined;
+    return `<tr class="${r.agent === state.me.username ? "me" : ""}${r.best ? " best" : ""}">
+      <td class="rank">${r.rank ? (r.best ? "🏆" : r.rank) : "–"}</td>
+      <td><b>${esc(u?.display_name || r.agent)}</b><small>${esc(u?.grade || "")}</small>${known && pay.objectif ? `<div class="bar ${r.pct >= 100 ? "done" : ""}"><span style="width:${r.pct}%"></span></div><small>${r.pct} % de l'objectif</small>` : ""}</td>
+      <td class="num">${r.count}</td><td class="num">${known ? money(r.total) : "—"}</td>
+      ${mgr ? `<td class="num">${money(r.salaire)}</td><td class="num">${r.prime ? money(r.prime) : "—"}</td><td class="num total">${money(r.aVerser)}</td>` : ""}</tr>`;
+  }).join("");
+  $("#caPayTotals").classList.toggle("hidden", !mgr);
+  if (mgr) $("#caPayTotals").innerHTML = `<div><span>Salaires</span><b>${money(pay.totalSalaires)}</b></div><div><span>Primes</span><b>${money(pay.totalPrimes)}</b></div><div class="total"><span>Total à verser</span><b>${money(pay.totalAVerser)}</b></div>`;
 }
 
 async function resetCA() {
@@ -654,8 +697,8 @@ function renderCatalog() {
   $("#addCatalogBtn").classList.toggle("hidden", !can("catalogue.gerer"));
   $("#vitrineBtn").classList.toggle("hidden", !can("catalogue.gerer"));
   $("#catalogDescription").textContent = can("catalogue.gerer")
-    ? "Définissez les prix de chaque type de bien. Ils se remplissent automatiquement dans les ventes et les locations."
-    : "Prix officiels de l'agence. Votre grade ne permet pas de les modifier.";
+    ? "Les prix des véhicules neufs se remplissent automatiquement dans les ventes. Les occasions cochées « vitrine » apparaissent sur le site public."
+    : "Prix officiels de la concession. Votre grade ne permet pas de les modifier.";
   const counts = {};
   state.catalog.forEach((c) => (counts[catOf(c)] = (counts[catOf(c)] || 0) + 1));
   const cats = [...CATEGORIES, ...(counts["Non classé"] ? ["Non classé"] : [])];
@@ -664,8 +707,8 @@ function renderCatalog() {
     .map(([v, l]) => `<button class="chip ${state.catFilter === v ? "active" : ""}" data-cat-filter="${esc(v)}">${esc(l)}</button>`).join("");
   const card = (c) => `
     <article class="record-card">
-      <div class="record-main user-main"><div class="cat-thumb" ${c.photo_at ? `data-view-photo="${c.id}:${c.photo_at}" data-photo-title="${esc(c.nom)}" title="Agrandir"` : ""}>${c.photo_at ? `<img data-photo="${c.id}:${c.photo_at}" alt="">` : "<span>❖</span>"}</div><div><div class="record-title"><b>${esc(c.nom)}</b><span class="badge">${esc(catOf(c))}</span>${c.public === 0 ? `<span class="badge bad">Masqué de la vitrine</span>` : ""}</div>
-        <p>${[c.prix_vente ? `Vente : <b>${money(c.prix_vente)}</b>` : "Pas en vente", c.prix_location ? `Location : <b>${money(c.prix_location)}</b> / semaine` : "Pas en location"].join(" • ")}</p></div></div>
+      <div class="record-main user-main"><div class="cat-thumb" ${c.photo_at ? `data-view-photo="${c.id}:${c.photo_at}" data-photo-title="${esc(c.nom)}" title="Agrandir"` : ""}>${c.photo_at ? `<img data-photo="${c.id}:${c.photo_at}" alt="">` : "<span>❖</span>"}</div><div><div class="record-title"><b>${esc(c.nom)}</b><span class="badge">${esc(catOf(c))}</span>${c.categorie === "Occasion" ? (c.public === 0 ? `<span class="badge bad">Masquée de la vitrine</span>` : `<span class="badge ok">En vitrine</span>`) : ""}</div>
+        <p>Prix : <b>${money(c.prix_vente)}</b>${c.description ? ` • ${esc(c.description)}` : ""}</p></div></div>
       <div class="record-meta"><div class="record-actions">${can("catalogue.gerer") ? `<button class="mini-btn" data-cat-edit="${c.id}">Modifier</button><button class="mini-btn danger" data-cat-delete="${c.id}">Supprimer</button>` : ""}</div></div>
     </article>`;
   const shown = state.catFilter === "all" ? cats : [state.catFilter];
@@ -674,7 +717,7 @@ function renderCatalog() {
     if (!group.length) return state.catFilter === "all" ? "" : `<div class="empty-state">Aucun bien dans « ${esc(cat)} » pour l'instant.</div>`;
     return `${state.catFilter === "all" ? `<h4 class="cat-heading">${esc(cat)} <span>${group.length}</span></h4>` : ""}${group.map(card).join("")}`;
   }).join("");
-  $("#catalogList").innerHTML = state.catalog.length ? html : `<div class="empty-state">Aucun bien dans le catalogue.${can("catalogue.gerer") ? " Cliquez sur « Nouveau bien » pour ajouter par exemple « Chambre de motel » avec son prix de location." : ""}</div>`;
+  $("#catalogList").innerHTML = state.catalog.length ? html : `<div class="empty-state">Aucun véhicule pour l'instant.${can("catalogue.gerer") ? " Cliquez sur « Nouveau véhicule » pour ajouter un modèle neuf avec son prix, ou une occasion à mettre en vitrine." : ""}</div>`;
   fillPhotos($("#catalogList"));
 }
 
@@ -719,6 +762,21 @@ async function viewPhoto(key, title) {
   $("#photoInfo").classList.add("hidden");
   openModal("photoModal");
 }
+function recPhotoHTML(ro) {
+  return `<div class="full-field photo-field"><span class="photo-label">Capture de la vente en jeu ${ro ? "" : '<i class="req">*</i>'}</span>
+    <div class="photo-box id-box"><img id="recPhotoPreview" alt="Capture de la vente" class="hidden"><span id="recPhotoEmpty">Ajoutez une capture d'écran de la facturation faite en jeu.</span></div>
+    ${ro ? "" : `<div class="photo-actions"><label class="btn btn-quiet file-btn">📷 <span id="recPhotoBtnLabel">Ajouter la capture</span><input type="file" id="recPhotoInput" accept="image/jpeg,image/png,image/webp" hidden></label></div>
+    <small class="muted small">Obligatoire : sans capture, la vente ne peut pas être enregistrée.</small>`}</div>`;
+}
+function setRecPhoto(data, msg) {
+  const img = $("#recPhotoPreview");
+  if (!img) return;
+  if (data) { img.src = data; img.classList.remove("hidden"); } else { img.removeAttribute("src"); img.classList.add("hidden"); }
+  $("#recPhotoEmpty").classList.toggle("hidden", !!data);
+  if (msg) $("#recPhotoEmpty").textContent = msg;
+  const lbl = $("#recPhotoBtnLabel");
+  if (lbl) lbl.textContent = data ? "Remplacer la capture" : "Ajouter la capture";
+}
 function compressImage(file) {
   return new Promise((resolve, reject) => {
     if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return reject(new Error("Choisissez une image JPG, PNG ou WEBP."));
@@ -751,17 +809,50 @@ function setCatalogPreview(data) {
   $("#catalogPhotoRemove").classList.toggle("hidden", !data);
 }
 
+function syncCatalogForm() {
+  const f = $("#catalogForm");
+  const occ = f.categorie.value === "Occasion";
+  $("#catalogPublicLine").classList.toggle("hidden", !occ);
+  $("#catalogDescLabel").textContent = occ ? "Informations (affichées sur la vitrine)" : "Informations (facultatif)";
+}
+function vehicleOf(name) {
+  const n = String(name || "").trim().toLowerCase();
+  return n ? state.catalog.find((c) => c.nom.trim().toLowerCase() === n && c.prix_vente > 0) : null;
+}
+async function showVehiclePreview(input) {
+  const img = input.parentElement.querySelector("[data-cat-preview]");
+  if (!img) return;
+  const c = vehicleOf(input.value);
+  img.classList.add("hidden"); img.removeAttribute("src"); delete img.dataset.viewPhoto;
+  if (!c?.photo_at) return;
+  const key = `${c.id}:${c.photo_at}`;
+  const data = await loadPhoto(key);
+  if (data && vehicleOf(input.value) === c) { img.src = data; img.dataset.viewPhoto = key; img.dataset.photoTitle = c.nom; img.classList.remove("hidden"); }
+}
+function onVehicleInput(input) {
+  const form = input.form;
+  const c = vehicleOf(input.value);
+  const hint = input.parentElement.querySelector("[data-vehicle-hint]");
+  if (c) {
+    const base = form.querySelector("[name=prix_base]");
+    if (base) { base.value = c.prix_vente; base.dispatchEvent(new Event("input", { bubbles: true })); }
+    recalcSale(form);
+    if (hint) hint.textContent = `Prix ${c.categorie === "Occasion" ? "de l'occasion" : "catalogue"} : ${money(c.prix_vente)} (modifiable).`;
+  } else if (hint && input.value.trim()) hint.textContent = "Modèle hors liste : indiquez le prix à la main.";
+  showVehiclePreview(input);
+}
 function openCatalog(id = null) {
   const c = id ? state.catalog.find((x) => x.id === id) : null;
   state.editingCatalog = c?.id || null;
   const f = $("#catalogForm");
   f.reset();
-  $("#catalogModalTitle").textContent = c ? `Modifier ${c.nom}` : "Nouveau bien";
+  $("#catalogModalTitle").textContent = c ? `Modifier ${c.nom}` : "Nouveau véhicule";
   f.nom.value = c?.nom || "";
   f.public.checked = !c || c.public !== 0;
-  f.categorie.value = c && CATEGORIES.includes(c.categorie) ? c.categorie : (CATEGORIES.includes(state.catFilter) ? state.catFilter : "");
+  f.categorie.value = c && CATEGORIES.includes(c.categorie) ? c.categorie : (CATEGORIES.includes(state.catFilter) ? state.catFilter : "Neuf");
   f.prix_vente.value = c?.prix_vente || "";
-  f.prix_location.value = c?.prix_location || "";
+  f.description.value = c?.description || "";
+  syncCatalogForm();
   $("#catalogPhotoInput").value = "";
   state.catalogPhoto = { changed: false, data: null, had: !!c?.photo_at };
   setCatalogPreview(null);
@@ -777,7 +868,7 @@ function openCatalog(id = null) {
 async function saveCatalog(e) {
   e.preventDefault();
   const f = e.currentTarget;
-  const body = { nom: f.nom.value.trim(), categorie: f.categorie.value, public: f.public.checked, prix_vente: f.prix_vente.value ? Number(f.prix_vente.value) : 0, prix_location: f.prix_location.value ? Number(f.prix_location.value) : 0 };
+  const body = { nom: f.nom.value.trim(), categorie: f.categorie.value, public: f.public.checked, prix_vente: f.prix_vente.value ? Number(f.prix_vente.value) : 0, description: f.description.value.trim() };
   const btn = f.querySelector("button[type=submit]");
   setBusy(btn, true, "Enregistrement…");
   try {
@@ -788,7 +879,7 @@ async function saveCatalog(e) {
     if (ph.changed && ph.data) await api(`catalog/${id}/photo`, { method: "PUT", body: { data: ph.data } });
     else if (ph.changed && ph.had) await api(`catalog/${id}/photo`, { method: "DELETE" });
     closeModal("catalogModal");
-    toast("Catalogue mis à jour.");
+    toast("Véhicule enregistré.");
     await loadAll();
   } catch (err) { $("#catalogError").textContent = err.message; }
   finally { setBusy(btn, false); }
@@ -796,8 +887,8 @@ async function saveCatalog(e) {
 
 async function deleteCatalog(id) {
   const c = state.catalog.find((x) => x.id === id);
-  if (!c || !(await confirmDialog("Retirer ce bien du catalogue ?", `« ${c.nom} » ne sera plus proposé dans les formulaires. Les ventes et locations déjà enregistrées ne changent pas.`))) return;
-  try { await api(`catalog/${id}`, { method: "DELETE" }); toast("Bien retiré du catalogue."); await loadAll(); }
+  if (!c || !(await confirmDialog("Retirer ce véhicule ?", `« ${c.nom} » ne sera plus proposé dans les ventes${c.categorie === "Occasion" ? " ni sur la vitrine" : ""}. Les ventes déjà enregistrées ne changent pas.`))) return;
+  try { await api(`catalog/${id}`, { method: "DELETE" }); toast("Véhicule retiré."); await loadAll(); }
   catch (err) { toast(err.message, "error"); }
 }
 
@@ -836,6 +927,8 @@ function openObjectives() {
   const f = $("#objectivesForm");
   f.entreprise.value = state.ca?.objectifs?.entreprise || "";
   f.employe.value = state.ca?.objectifs?.employe || "";
+  f.salaire_max.value = state.ca?.paie?.max ?? 250000;
+  f.prime_meilleur.value = state.ca?.paie?.prime ?? 50000;
   $("#objectivesError").textContent = "";
   openModal("objectivesModal");
   setTimeout(() => f.entreprise.focus(), 40);
@@ -847,7 +940,7 @@ async function saveObjectives(e) {
   const btn = f.querySelector("button[type=submit]");
   setBusy(btn, true, "Enregistrement…");
   try {
-    await api("ca/objectifs", { method: "POST", body: { entreprise: Number(f.entreprise.value) || 0, employe: Number(f.employe.value) || 0 } });
+    await api("ca/objectifs", { method: "POST", body: { entreprise: Number(f.entreprise.value) || 0, employe: Number(f.employe.value) || 0, salaire_max: Number(f.salaire_max.value) || 0, prime_meilleur: Number(f.prime_meilleur.value) || 0 } });
     closeModal("objectivesModal");
     toast("Objectifs enregistrés.");
     await loadAll();
@@ -1360,6 +1453,8 @@ function renderPublic() {
   $("#recrutement").classList.toggle("hidden", !v.recrutement);
   $("#pubNavJobs").classList.toggle("hidden", !v.recrutement);
   if (v.recrutementMessage) $("#pubJobsText").textContent = v.recrutementMessage;
+  $("#biens").classList.toggle("hidden", !pub.items.length);
+  $("#pubNavOcc").classList.toggle("hidden", !pub.items.length);
   const pool = pub.items.filter(pubAvailable);
   const counts = {};
   pool.forEach((c) => (counts[catOf(c)] = (counts[catOf(c)] || 0) + 1));
@@ -1371,11 +1466,11 @@ function renderPublic() {
   const list = pool.filter((c) => pub.cat === "all" || catOf(c) === pub.cat);
   $("#pubGrid").innerHTML = list.length ? list.map((c) => `
     <button class="pub-card" data-pub-item="${c.id}">
-      <div class="pub-photo">${c.photo_at ? `<img src="/api/public/photo/${c.id}?v=${c.photo_at}" alt="${esc(c.nom)}" loading="lazy">` : `<span class="pub-noimg">❖</span>`}<span class="pub-cat">${esc(catOf(c))}</span></div>
-      <div class="pub-body"><b>${esc(c.nom)}</b>
-        <div class="pub-prices">${c.prix_vente ? `<span><small>Achat</small>${money(c.prix_vente)}</span>` : ""}${c.prix_location ? `<span><small>Location</small>${money(c.prix_location)}<i> / semaine</i></span>` : ""}</div>
+      <div class="pub-photo">${c.photo_at ? `<img src="/api/public/photo/${c.id}?v=${c.photo_at}" alt="${esc(c.nom)}" loading="lazy">` : `<span class="pub-noimg">❖</span>`}<span class="pub-cat">Occasion</span></div>
+      <div class="pub-body"><b>${esc(c.nom)}</b>${c.description ? `<p class="pub-desc">${esc(c.description)}</p>` : ""}
+        <div class="pub-prices"><span><small>Prix</small>${money(c.prix_vente)}</span></div>
       </div>
-    </button>`).join("") : `<div class="empty-state">${pub.items.length ? "Aucun bien ne correspond à ce filtre." : "Notre catalogue arrive très bientôt."}</div>`;
+    </button>`).join("") : `<div class="empty-state">${pub.items.length ? "Aucun véhicule ne correspond à ce filtre." : "Aucune occasion disponible pour le moment."}</div>`;
 }
 
 function openPublicItem(id) {
@@ -1385,7 +1480,7 @@ function openPublicItem(id) {
   const img = $("#photoFull");
   if (c.photo_at) { img.src = `/api/public/photo/${c.id}?v=${c.photo_at}`; img.classList.remove("hidden"); } else { img.removeAttribute("src"); img.classList.add("hidden"); }
   const v = pub.vitrine || {};
-  $("#photoInfo").innerHTML = `<span class="badge">${esc(catOf(c))}</span> ${c.prix_vente ? `Achat : <b>${money(c.prix_vente)}</b>` : ""}${c.prix_vente && c.prix_location ? " • " : ""}${c.prix_location ? `Location : <b>${money(c.prix_location)}</b> / semaine` : ""}${v.tel ? `<br>Intéressé ? Appelez l'agence au <b>${esc(v.tel)}</b>.` : ""}<br><button class="btn btn-primary pub-rdv-btn" data-pub-rdv="${esc(c.nom)}">Demander un rendez-vous pour ce bien</button>`;
+  $("#photoInfo").innerHTML = `<span class="badge">Occasion</span> Prix : <b>${money(c.prix_vente)}</b>${c.description ? `<br><span class="pub-info">${esc(c.description)}</span>` : ""}${v.tel ? `<br>Intéressé ? Appelez la concession au <b>${esc(v.tel)}</b>.` : ""}<br><button class="btn btn-primary pub-rdv-btn" data-pub-rdv="${esc(c.nom)}">Demander un rendez-vous pour ce véhicule</button>`;
   $("#photoInfo").classList.remove("hidden");
   openModal("photoModal");
 }
@@ -1412,6 +1507,7 @@ document.addEventListener("click", async (e) => {
   if (racc) { const r = state.requests.find((x) => x.id === Number(racc.dataset.reqAccount)); openUser(); if (r) $("#userForm").display_name.value = r.data.nom; return; }
   const po = t.closest("[data-profile-open]");
   if (po) { openProfile(po.dataset.profileOpen); return; }
+  if (t.closest("#recPhotoPreview")) { $("#photoFull").src = $("#recPhotoPreview").src; $("#photoFull").classList.remove("hidden"); $("#photoTitle").textContent = "Capture de la vente"; $("#photoInfo").classList.add("hidden"); openModal("photoModal"); return; }
   if (t.closest("#idPhotoPreview")) { $("#photoFull").src = $("#idPhotoPreview").src; $("#photoFull").classList.remove("hidden"); $("#photoTitle").textContent = "Carte d'identité RP"; $("#photoInfo").classList.add("hidden"); openModal("photoModal"); return; }
 
   const eedit = t.closest("[data-event-edit]");
@@ -1499,7 +1595,9 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && e.target.matches(".record-card[data-open]")) e.target.click();
 });
 
+document.addEventListener("input", (e) => { if (e.target.matches("#recordFields input[data-vehicle]")) onVehicleInput(e.target); });
 document.addEventListener("change", (e) => {
+  if (e.target.matches("#catalogForm select[name=categorie]")) { syncCatalogForm(); return; }
   if (!e.target.closest("#recordForm")) return;
   if (!e.target.matches("select[data-catalog], select[name=duree], select[name=partenariat]")) return;
   const form = e.target.form;
@@ -1602,6 +1700,15 @@ $("#idPhotoInput").addEventListener("change", async (e) => {
   $("#profileError").textContent = "";
   try { const data = await compressImage(file); Object.assign(state.editingProfile, { idChanged: true, idData: data }); setIdPreview(data); }
   catch (err) { $("#profileError").textContent = err.message; }
+  e.target.value = "";
+});
+$("#recordFields").addEventListener("change", async (e) => {
+  if (e.target.id !== "recPhotoInput") return;
+  const file = e.target.files[0];
+  if (!file) return;
+  $("#recordError").textContent = "";
+  try { const data = await compressImage(file); state.editing.photo = data; setRecPhoto(data); }
+  catch (err) { $("#recordError").textContent = err.message; }
   e.target.value = "";
 });
 $("#idPhotoRemove").addEventListener("click", () => { Object.assign(state.editingProfile, { idChanged: true, idData: null }); setIdPreview(null); });

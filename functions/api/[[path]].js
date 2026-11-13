@@ -29,6 +29,7 @@ const SCHEMA = {
     required: ["vehicule", "prix"],
     amount: "prix",
     counted: true, // une vente est enregistrée uniquement quand elle est conclue
+    photoRequired: true, // capture d'écran de la facture en jeu obligatoire
   },
   clients: {
     fields: { nom: "text", telephone: "text", employeur: "text", liste_noire: "bool", motif: "text" },
@@ -48,7 +49,7 @@ const SCHEMA = {
 };
 const TYPE_LABEL = { ventes: "Vente", locations: "Location", clients: "Client", partenariats: "Partenariat", depenses: "Dépense" };
 const fmt$ = (n) => `${Math.round(n || 0).toLocaleString("fr-FR")} $`;
-const CATEGORIES = ["Motels", "Appartements", "Penthouses", "Maisons", "Garages", "Bureaux", "Entrepôts"];
+const CATEGORIES = ["Neuf", "Occasion"];
 const FIELD_LABELS = { vehicule: "Véhicule", libelle: "Libellé", montant: "Montant", bien: "Bien / propriété", prix: "Prix de vente", loyer: "Montant encaissé", nom: "Nom Prénom", organisation: "Organisation" };
 
 const INIT_SQL = [
@@ -133,6 +134,10 @@ const INIT_SQL = [
     prix_location INTEGER NOT NULL DEFAULT 0,
     duree TEXT NOT NULL DEFAULT '',
     created_at INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS d8_recphotos (
+    record_id INTEGER PRIMARY KEY,
+    data TEXT NOT NULL,
+    updated_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS d8_photos (
     catalog_id INTEGER PRIMARY KEY,
     data TEXT NOT NULL,
@@ -215,6 +220,7 @@ async function init(db) {
   // Mise à niveau : catégorie des biens du catalogue (ignorée si la colonne existe déjà)
   try { await db.prepare("ALTER TABLE d8_catalog ADD COLUMN categorie TEXT NOT NULL DEFAULT ''").run(); } catch { /* déjà présente */ }
   try { await db.prepare("ALTER TABLE d8_catalog ADD COLUMN public INTEGER NOT NULL DEFAULT 1").run(); } catch { /* déjà présente */ }
+  try { await db.prepare("ALTER TABLE d8_catalog ADD COLUMN description TEXT NOT NULL DEFAULT ''").run(); } catch { /* déjà présente */ }
   // Grades par défaut, créés une seule fois
   if (!(await db.prepare("SELECT COUNT(*) AS n FROM d8_grades").first()).n) {
     await db.batch(DEFAULT_GRADES.map(([name, perms], i) =>
@@ -258,7 +264,7 @@ export async function onRequest({ request, env, params }) {
     await init(db);
 
     const method = request.method;
-    const [a, b, c] = [].concat(params.path || []);
+    const [a, b, c, d] = [].concat(params.path || []);
     let body = {};
     if (["POST", "PUT", "PATCH"].includes(method)) {
       body = await request.json().catch(() => ({}));
@@ -282,7 +288,7 @@ export async function onRequest({ request, env, params }) {
     if (a === "me" && b === "password" && method === "POST") return await changeOwnPassword(db, me, body);
     if (a === "users") return await users(db, me, method, b, body);
     if (a === "profiles") return await profiles(db, me, method, b, c, body);
-    if (a === "records" && SCHEMA[b]) return await records(db, me, method, b, c, body);
+    if (a === "records" && SCHEMA[b]) return await records(db, me, method, b, c, body, d);
     if (a === "ca") return await ca(db, me, method, b, c, body);
     if (a === "catalog") return await catalog(db, me, method, b, c, body);
     if (a === "grades") return await grades(db, me, method, b, c, body);
@@ -461,36 +467,67 @@ async function cleanRecord(db, me, spec, body, existing) {
 
 const parseRow = (r) => ({ ...r, data: JSON.parse(r.data) });
 
-async function records(db, me, method, type, id, body) {
+const PHOTO_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
+function cleanRecordPhoto(v) {
+  const data = String(v || "");
+  if (!PHOTO_RE.test(data)) fail(400, "Format d'image non pris en charge (JPG, PNG ou WEBP).");
+  if (data.length > 1500000) fail(400, "Capture trop lourde.");
+  return data;
+}
+const savePhoto = (db, id, data, now) => db.prepare("INSERT INTO d8_recphotos (record_id, data, updated_at) VALUES (?, ?, ?) ON CONFLICT(record_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at").bind(id, data, now).run();
+const PHOTO_MISSING = "La capture d'écran de la vente en jeu est obligatoire.";
+
+async function records(db, me, method, type, id, body, sub) {
   const spec = SCHEMA[type];
   const now = Date.now();
   if (spec.perm && !can(me, spec.perm)) fail(403, "Votre grade ne permet pas d'accéder à cette section.");
 
   if (method === "GET" && !id) {
-    const { results } = await db.prepare("SELECT * FROM d8_records WHERE type = ? ORDER BY created_at DESC").bind(type).all();
+    const { results } = await db.prepare("SELECT r.*, p.updated_at AS photo_at FROM d8_records r LEFT JOIN d8_recphotos p ON p.record_id = r.id WHERE r.type = ? ORDER BY r.created_at DESC").bind(type).all();
     return json(results.map(parseRow));
   }
   if (method === "POST" && !id) {
     if (!spec.perm && !can(me, "dossiers.creer")) fail(403, "Votre grade ne permet pas de créer des dossiers.");
     const r = await cleanRecord(db, me, spec, body, null);
+    let photo = null;
+    if (spec.photoRequired) { if (!body.photo) fail(400, PHOTO_MISSING); photo = cleanRecordPhoto(body.photo); }
     const res = await db.prepare(
       "INSERT INTO d8_records (type, data, agent, amount, closed_at, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(type, JSON.stringify(r.data), r.agent, r.amount, r.counted ? now : null, me.username, now, now).run();
-    const row = await db.prepare("SELECT * FROM d8_records WHERE id = ?").bind(res.meta.last_row_id).first();
-    await logAction(db, me, "création", TYPE_LABEL[type], recordLabel(type, r.data), spec.amount ? fmt$(r.amount) + (r.data.partenariat ? ` • partenaire ${r.data.partenariat} (−${r.data.remise || 0} %)` : "") : "");
+    const newId = res.meta.last_row_id;
+    if (photo) {
+      try { await savePhoto(db, newId, photo, now); }
+      catch (e) { await db.prepare("DELETE FROM d8_records WHERE id = ?").bind(newId).run(); throw e; }
+    }
+    const row = await db.prepare("SELECT r.*, p.updated_at AS photo_at FROM d8_records r LEFT JOIN d8_recphotos p ON p.record_id = r.id WHERE r.id = ?").bind(newId).first();
+    await logAction(db, me, "création", TYPE_LABEL[type], recordLabel(type, r.data), (spec.amount ? fmt$(r.amount) + (r.data.partenariat ? ` • partenaire ${r.data.partenariat} (−${r.data.remise || 0} %)` : "") : "") + (photo ? " • capture jointe" : ""));
     return json(parseRow(row), 201);
   }
 
   const rec = /^\d+$/.test(String(id)) ? await db.prepare("SELECT * FROM d8_records WHERE id = ? AND type = ?").bind(Number(id), type).first() : null;
   if (!rec) fail(404, "Dossier introuvable.");
 
+  if (sub === "photo") {
+    if (!spec.photoRequired || method !== "GET") fail(405, "Méthode non autorisée.");
+    const p = await db.prepare("SELECT data, updated_at FROM d8_recphotos WHERE record_id = ?").bind(rec.id).first();
+    if (!p) fail(404, "Aucune capture pour cette vente.");
+    return json(p);
+  }
+  if (sub) fail(404, "Route inconnue.");
+
   if (method === "PUT") {
     if (!spec.perm && !canEditRecord(me, rec)) fail(403, "Vous n'avez pas le droit de modifier ce dossier.");
     const r = await cleanRecord(db, me, spec, body, rec);
+    let photo = null;
+    if (spec.photoRequired) {
+      if (body.photo) photo = cleanRecordPhoto(body.photo);
+      else if (!(await db.prepare("SELECT 1 AS x FROM d8_recphotos WHERE record_id = ?").bind(rec.id).first())) fail(400, PHOTO_MISSING);
+    }
+    if (photo) await savePhoto(db, rec.id, photo, now);
     const closedAt = r.counted ? (rec.closed_at || now) : null;
     await db.prepare("UPDATE d8_records SET data = ?, agent = ?, amount = ?, closed_at = ?, updated_at = ? WHERE id = ?")
       .bind(JSON.stringify(r.data), r.agent, r.amount, closedAt, now, rec.id).run();
-    const row = await db.prepare("SELECT * FROM d8_records WHERE id = ?").bind(rec.id).first();
+    const row = await db.prepare("SELECT r.*, p.updated_at AS photo_at FROM d8_records r LEFT JOIN d8_recphotos p ON p.record_id = r.id WHERE r.id = ?").bind(rec.id).first();
     const before = JSON.parse(rec.data);
     const changed = Object.keys(r.data).filter((k) => String(before[k] ?? "") !== String(r.data[k] ?? ""));
     const parts = [];
@@ -498,12 +535,16 @@ async function records(db, me, method, type, id, body) {
     if (rec.agent !== r.agent) parts.push(`agent : ${rec.agent || "—"} → ${r.agent}`);
     const others = changed.filter((k) => k !== spec.amount && k !== "agent");
     if (others.length) parts.push(`champs modifiés : ${others.join(", ")}`);
+    if (photo) parts.push("capture remplacée");
     if (parts.length) await logAction(db, me, "modification", TYPE_LABEL[type], recordLabel(type, r.data), parts.join(" • "));
     return json(parseRow(row));
   }
   if (method === "DELETE") {
     if (!spec.perm && !can(me, "dossiers.supprimer")) fail(403, "Votre grade ne permet pas de supprimer des dossiers.");
-    await db.prepare("DELETE FROM d8_records WHERE id = ?").bind(rec.id).run();
+    await db.batch([
+      db.prepare("DELETE FROM d8_records WHERE id = ?").bind(rec.id),
+      db.prepare("DELETE FROM d8_recphotos WHERE record_id = ?").bind(rec.id),
+    ]);
     const d = JSON.parse(rec.data);
     await logAction(db, me, "suppression", TYPE_LABEL[type], recordLabel(type, d), [spec.amount && fmt$(rec.amount), rec.agent && `agent ${rec.agent}`, `créé par ${rec.created_by}`].filter(Boolean).join(" • "));
     return json({ ok: true });
@@ -527,6 +568,27 @@ async function caBreakdown(db, since) {
   return { employees: results, total, ventes: sum("ventes"), locations: sum("locations"), count: sum("count"), depenses: dep.total, depensesCount: dep.n, benefice: total - dep.total };
 }
 
+// Salaires : salaire max × (CA de l'employé ÷ objectif par employé), plafonné au max ; prime au(x) meilleur(s) vendeur(s).
+async function payroll(db, b) {
+  const get = async (k, d) => { const v = (await db.prepare("SELECT value FROM d8_settings WHERE key = ?").bind(k).first())?.value; return v === undefined || v === null || v === "" ? d : Number(v); };
+  const max = await get("salaire_max", 250000), prime = await get("prime_meilleur", 50000), objectif = await get("objectif_employe", 0);
+  const { results: users } = await db.prepare("SELECT username FROM d8_users").all();
+  const rows = users.map((u) => { const e = b.employees.find((x) => x.agent === u.username); return { agent: u.username, total: e?.total || 0, count: e?.count || 0 }; });
+  rows.sort((x, y) => y.total - x.total || y.count - x.count);
+  const top = rows.length && rows[0].total > 0 ? rows[0].total : 0;
+  for (const r of rows) {
+    const ratio = objectif ? Math.min(1, r.total / objectif) : 0;
+    r.rank = r.total > 0 ? rows.filter((o) => o.total > r.total).length + 1 : null;
+    r.pct = objectif ? Math.round(ratio * 1000) / 10 : null;
+    r.salaire = Math.round(max * ratio);
+    r.best = top > 0 && r.total === top;
+    r.prime = r.best ? prime : 0;
+    r.aVerser = r.salaire + r.prime;
+  }
+  const s = (k) => rows.reduce((a, r) => a + r[k], 0);
+  return { max, prime, objectif, rows, totalSalaires: s("salaire"), totalPrimes: s("prime"), totalAVerser: s("aVerser"), best: rows.filter((r) => r.best).map((r) => r.agent) };
+}
+
 async function ca(db, me, method, sub, id, body = {}) {
   const since = Number((await db.prepare("SELECT value FROM d8_settings WHERE key = 'ca_reset_at'").first())?.value || 0);
   const isManager = can(me, "ca.equipe");
@@ -537,6 +599,11 @@ async function ca(db, me, method, sub, id, body = {}) {
     const obj = async (k) => Number((await db.prepare("SELECT value FROM d8_settings WHERE key = ?").bind(k).first())?.value || 0);
     const out = { since, total: b.total, ventes: b.ventes, locations: b.locations, count: b.count, mine,
       objectifs: { entreprise: await obj("objectif_entreprise"), employe: await obj("objectif_employe") } };
+    const pay = await payroll(db, b);
+    out.paie = { max: pay.max, prime: pay.prime, objectif: pay.objectif, best: pay.best,
+      mine: pay.rows.find((r) => r.agent === me.username) || null,
+      classement: pay.rows.map((r) => (isManager || r.agent === me.username ? r : { agent: r.agent, rank: r.rank, count: r.count, best: r.best })) };
+    if (isManager) Object.assign(out.paie, { totalSalaires: pay.totalSalaires, totalPrimes: pay.totalPrimes, totalAVerser: pay.totalAVerser });
     if (isManager || can(me, "depenses.gerer")) {
       Object.assign(out, { depenses: b.depenses, depensesCount: b.depensesCount, benefice: b.benefice });
       out.compte = await accountBalance(db);
@@ -564,9 +631,12 @@ async function ca(db, me, method, sub, id, body = {}) {
 
   if (method === "POST" && sub === "objectifs") {
     const ent = cleanMoney(body.entreprise), emp = cleanMoney(body.employe);
-    await db.batch([["objectif_entreprise", ent], ["objectif_employe", emp]].map(([k, v]) =>
+    const pairs = [["objectif_entreprise", ent], ["objectif_employe", emp]];
+    if (body.salaire_max !== undefined) pairs.push(["salaire_max", cleanMoney(body.salaire_max)]);
+    if (body.prime_meilleur !== undefined) pairs.push(["prime_meilleur", cleanMoney(body.prime_meilleur)]);
+    await db.batch(pairs.map(([k, v]) =>
       db.prepare("INSERT INTO d8_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(k, String(v))));
-    await logAction(db, me, "modification", "Objectifs", "Objectifs de la semaine", `entreprise ${fmt$(ent)} • par employé ${fmt$(emp)}`);
+    await logAction(db, me, "modification", "Objectifs", "Objectifs et salaires", [`entreprise ${fmt$(ent)}`, `par employé ${fmt$(emp)}`, body.salaire_max !== undefined && `salaire max ${fmt$(cleanMoney(body.salaire_max))}`, body.prime_meilleur !== undefined && `prime ${fmt$(cleanMoney(body.prime_meilleur))}`].filter(Boolean).join(" • "));
     return json({ ok: true });
   }
 
@@ -575,14 +645,17 @@ async function ca(db, me, method, sub, id, body = {}) {
     const now = Date.now();
     let start = since;
     if (!start) start = (await db.prepare("SELECT MIN(closed_at) AS m FROM d8_records WHERE closed_at IS NOT NULL").first())?.m || now;
-    const details = { ventes: b.ventes, locations: b.locations, count: b.count, employees: b.employees, depenses: b.depenses, benefice: b.benefice };
+    const pay = await payroll(db, b);
+    const details = { ventes: b.ventes, locations: b.locations, count: b.count, employees: b.employees, depenses: b.depenses, benefice: b.benefice,
+      paie: { max: pay.max, prime: pay.prime, objectif: pay.objectif, best: pay.best, totalAVerser: pay.totalAVerser,
+        rows: pay.rows.filter((r) => r.aVerser > 0 || r.total > 0).map((r) => ({ agent: r.agent, total: r.total, salaire: r.salaire, prime: r.prime, aVerser: r.aVerser })) } };
     await db.batch([
       db.prepare("INSERT INTO d8_ca_archives (period_start, period_end, total, details, reset_by) VALUES (?, ?, ?, ?, ?)")
         .bind(start, now, b.total, JSON.stringify(details), me.username),
       db.prepare("INSERT INTO d8_settings (key, value) VALUES ('ca_reset_at', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
         .bind(String(now)),
     ]);
-    await logAction(db, me, "clôture", "CA", "Clôture de la semaine", `CA ${fmt$(b.total)} • dépenses ${fmt$(b.depenses)} • bénéfice ${fmt$(b.benefice)}`);
+    await logAction(db, me, "clôture", "CA", "Clôture de la semaine", `CA ${fmt$(b.total)} • dépenses ${fmt$(b.depenses)} • bénéfice ${fmt$(b.benefice)}${pay.best.length ? ` • meilleur vendeur : ${pay.best.join(", ")}` : ""} • salaires et primes ${fmt$(pay.totalAVerser)}`);
     return json({ ok: true, since: now });
   }
   if (method === "DELETE" && sub === "archives" && /^\d+$/.test(String(id))) {
@@ -651,8 +724,8 @@ async function publicApi(db, request, method, what, id, body) {
   if (method !== "GET") fail(405, "Méthode non autorisée.");
   if (what === "catalog") {
     const { results } = await db.prepare(
-      `SELECT c.id, c.nom, c.categorie, c.prix_vente, c.prix_location, p.updated_at AS photo_at
-       FROM d8_catalog c LEFT JOIN d8_photos p ON p.catalog_id = c.id WHERE c.public = 1 ORDER BY c.nom COLLATE NOCASE`
+      `SELECT c.id, c.nom, c.categorie, c.prix_vente, c.description, p.updated_at AS photo_at
+       FROM d8_catalog c LEFT JOIN d8_photos p ON p.catalog_id = c.id WHERE c.public = 1 AND c.categorie = 'Occasion' AND c.prix_vente > 0 ORDER BY c.created_at DESC`
     ).all();
     const ev = (await db.prepare("SELECT id, titre, date, lieu, description FROM d8_events WHERE date >= ? ORDER BY date LIMIT 6").bind(Date.now() - 6 * 3600000).all()).results;
     return new Response(JSON.stringify({ items: results, vitrine: await vitrineSettings(db), events: ev }), {
@@ -660,7 +733,7 @@ async function publicApi(db, request, method, what, id, body) {
     });
   }
   if (what === "photo" && /^\d+$/.test(String(id))) {
-    const row = await db.prepare("SELECT p.data FROM d8_photos p JOIN d8_catalog c ON c.id = p.catalog_id WHERE c.id = ? AND c.public = 1").bind(Number(id)).first();
+    const row = await db.prepare("SELECT p.data FROM d8_photos p JOIN d8_catalog c ON c.id = p.catalog_id WHERE c.id = ? AND c.public = 1 AND c.categorie = 'Occasion'").bind(Number(id)).first();
     if (!row) fail(404, "Photo introuvable.");
     const m = row.data.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
     if (!m) fail(404, "Photo introuvable.");
@@ -717,19 +790,19 @@ async function catalog(db, me, method, id, sub, body) {
   if (!can(me, "catalogue.gerer")) fail(403, "Votre grade ne permet pas de modifier le catalogue.");
   const clean = () => {
     const nom = cleanText(body.nom, 100);
-    if (!nom) fail(400, "Le nom du bien est obligatoire.");
+    if (!nom) fail(400, "Le modèle du véhicule est obligatoire.");
     const vente = cleanMoney(body.prix_vente);
-    const location = cleanMoney(body.prix_location);
-    if (!vente && !location) fail(400, "Indiquez au moins un prix : vente ou location.");
+    const location = 0;
+    if (!vente) fail(400, "Indiquez le prix du véhicule.");
     const categorie = String(body.categorie || "");
-    if (!CATEGORIES.includes(categorie)) fail(400, "Choisissez une catégorie.");
-    return { nom, vente, location, categorie, duree: cleanText(body.duree, 60), visible: body.public === false || body.public === 0 ? 0 : 1 };
+    if (!CATEGORIES.includes(categorie)) fail(400, "Choisissez : neuf ou occasion.");
+    return { nom, vente, location, categorie, description: cleanText(body.description, 800), duree: "", visible: categorie === "Occasion" && !(body.public === false || body.public === 0) ? 1 : 0 };
   };
   if (method === "POST" && !id) {
     const c = clean();
-    const r = await db.prepare("INSERT INTO d8_catalog (nom, prix_vente, prix_location, duree, categorie, public, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-      .bind(c.nom, c.vente, c.location, c.duree, c.categorie, c.visible, Date.now()).run();
-    await logAction(db, me, "création", "Catalogue", c.nom, `${c.categorie} • vente ${fmt$(c.vente)} • location ${fmt$(c.location)}/sem.`);
+    const r = await db.prepare("INSERT INTO d8_catalog (nom, prix_vente, prix_location, duree, categorie, public, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(c.nom, c.vente, c.location, c.duree, c.categorie, c.visible, c.description, Date.now()).run();
+    await logAction(db, me, "création", "Véhicules", c.nom, `${c.categorie} • ${fmt$(c.vente)}${c.visible ? " • affiché en vitrine" : ""}`);
     return json({ id: r.meta.last_row_id }, 201);
   }
   if (!/^\d+$/.test(String(id))) fail(404, "Bien introuvable.");
@@ -737,15 +810,15 @@ async function catalog(db, me, method, id, sub, body) {
     const c = clean();
     const old = await db.prepare("SELECT * FROM d8_catalog WHERE id = ?").bind(Number(id)).first();
     if (old && (old.prix_vente !== c.vente || old.prix_location !== c.location || old.nom !== c.nom || old.categorie !== c.categorie)) {
-      await logAction(db, me, "modification", "Catalogue", c.nom, [old.nom !== c.nom && `nom : ${old.nom} → ${c.nom}`, old.categorie !== c.categorie && `catégorie : ${old.categorie || "—"} → ${c.categorie}`, old.prix_vente !== c.vente && `vente : ${fmt$(old.prix_vente)} → ${fmt$(c.vente)}`, old.prix_location !== c.location && `location : ${fmt$(old.prix_location)} → ${fmt$(c.location)}`].filter(Boolean).join(" • "));
+      await logAction(db, me, "modification", "Véhicules", c.nom, [old.nom !== c.nom && `modèle : ${old.nom} → ${c.nom}`, old.categorie !== c.categorie && `${old.categorie || "—"} → ${c.categorie}`, old.prix_vente !== c.vente && `prix : ${fmt$(old.prix_vente)} → ${fmt$(c.vente)}`].filter(Boolean).join(" • "));
     }
-    await db.prepare("UPDATE d8_catalog SET nom = ?, prix_vente = ?, prix_location = ?, duree = ?, categorie = ?, public = ? WHERE id = ?")
-      .bind(c.nom, c.vente, c.location, c.duree, c.categorie, c.visible, Number(id)).run();
+    await db.prepare("UPDATE d8_catalog SET nom = ?, prix_vente = ?, prix_location = ?, duree = ?, categorie = ?, public = ?, description = ? WHERE id = ?")
+      .bind(c.nom, c.vente, c.location, c.duree, c.categorie, c.visible, c.description, Number(id)).run();
     return json({ ok: true });
   }
   if (method === "DELETE") {
     const old = await db.prepare("SELECT nom FROM d8_catalog WHERE id = ?").bind(Number(id)).first();
-    if (old) await logAction(db, me, "suppression", "Catalogue", old.nom);
+    if (old) await logAction(db, me, "suppression", "Véhicules", old.nom);
     await db.batch([
       db.prepare("DELETE FROM d8_photos WHERE catalog_id = ?").bind(Number(id)),
       db.prepare("DELETE FROM d8_catalog WHERE id = ?").bind(Number(id)),

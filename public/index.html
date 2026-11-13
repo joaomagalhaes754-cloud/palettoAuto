@@ -11,14 +11,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/assets/style.css?v=2">
+  <link rel="stylesheet" href="/assets/style.css?v=3">
 </head>
 <body>
   <!-- ============ VITRINE PUBLIQUE ============ -->
   <div id="publicSite" class="public hidden">
     <header class="pub-header">
       <a class="brand" href="#top" data-pub-top><span class="brand-mark">PA</span><span><b>PALETTO AUTO</b><small>CONCESSIONNAIRE</small></span></a>
-      <nav class="pub-nav"><a href="#evenements" id="pubNavEvents" class="hidden">Événements</a><a href="#recrutement" id="pubNavJobs" class="hidden">Recrutement</a><a href="#contact">Contact</a></nav>
+      <nav class="pub-nav"><a href="#biens" id="pubNavOcc" class="hidden">Occasions</a><a href="#evenements" id="pubNavEvents" class="hidden">Événements</a><a href="#recrutement" id="pubNavJobs" class="hidden">Recrutement</a><a href="#contact">Contact</a></nav>
       <button class="btn btn-primary" id="publicLoginBtn">Espace employé <span>→</span></button>
     </header>
     <section class="pub-hero" id="top">
@@ -31,8 +31,8 @@
     </section>
     <section class="pub-section hidden" id="biens">
       <div class="pub-head">
-        <div><p class="section-kicker">NOTRE CATALOGUE</p><h2>Nos biens<span class="emerald">.</span></h2></div>
-        <div class="pub-mode" id="pubMode"><button class="chip active" data-pub-mode="all">Tout</button><button class="chip" data-pub-mode="vente">À vendre</button><button class="chip" data-pub-mode="location">À louer</button></div>
+        <div><p class="section-kicker">OCCASIONS</p><h2>Nos véhicules d'occasion<span class="emerald">.</span></h2></div>
+        <div class="pub-mode hidden" id="pubMode"><button class="chip active" data-pub-mode="all">Tout</button><button class="chip" data-pub-mode="vente">À vendre</button><button class="chip" data-pub-mode="location">À louer</button></div>
       </div>
       <div class="filters" id="pubCats"></div>
       <div class="pub-grid" id="pubGrid"><div class="empty-state">Chargement du catalogue…</div></div>
@@ -106,6 +106,7 @@
         <button class="side-link" data-page="dashboard"><span class="side-icon">▦</span> Tableau de bord</button>
         <button class="side-link" data-page="ventes"><span class="side-icon">◈</span> Ventes</button>
         <button class="side-link" data-page="clients"><span class="side-icon">♙</span> Clients</button>
+        <button class="side-link" data-page="catalog"><span class="side-icon">⛟</span> Véhicules</button>
         <button class="side-link" data-page="partenariats"><span class="side-icon">◇</span> Partenariats</button>
         <button class="side-link hidden" id="requestsNav" data-page="requests"><span class="side-icon">✉</span> Demandes <span class="nav-badge hidden" id="requestsBadge"></span></button>
       </nav>
@@ -152,7 +153,7 @@
             <button class="quick-action" data-quick="clients"><span>＋</span><span><b>Ajouter un client</b><small>Compléter votre portefeuille</small></span><strong>→</strong></button>
             <button class="quick-action" data-quick="partenariats"><span>＋</span><span><b>Nouveau partenariat</b><small>Enregistrer un accord professionnel</small></span><strong>→</strong></button>
             <div class="my-ca hidden" id="dashAccount"><div class="my-ca-row"><span>Solde du compte</span><b id="dashSolde">—</b></div></div>
-            <div class="my-ca"><div class="my-ca-row"><span>Mon CA cette semaine</span><b id="myCA">—</b></div><div id="myCAProgress"></div></div>
+            <div class="my-ca"><div class="my-ca-row"><span>Mon CA cette semaine</span><b id="myCA">—</b></div><div id="myCAProgress"></div><div id="myPay"></div></div>
           </section>
         </div>
       </section>
@@ -171,20 +172,20 @@
 
       <!-- Catalogue des biens -->
       <section class="page" id="page-catalog">
-        <div class="page-heading"><div><p class="section-kicker">TARIFS DE L'AGENCE</p><h1>Catalogue des biens<span class="emerald">.</span></h1><p class="muted" id="catalogDescription"></p></div><div class="heading-actions"><button class="btn btn-primary hidden" id="addCatalogBtn">＋ Nouveau bien</button></div></div>
+        <div class="page-heading"><div><p class="section-kicker">TARIFS DE LA CONCESSION</p><h1>Véhicules<span class="emerald">.</span></h1><p class="muted" id="catalogDescription"></p></div><div class="heading-actions"><button class="btn btn-primary hidden" id="addCatalogBtn">＋ Nouveau véhicule</button></div></div>
         <div class="filters" id="catalogTabs"></div>
         <div id="catalogList" class="records-list"></div>
       </section>
 
       <!-- Chiffre d'affaires -->
       <section class="page" id="page-ca">
-        <div class="page-heading"><div><p class="section-kicker">PILOTAGE FINANCIER</p><h1>Chiffre d'affaires<span class="emerald">.</span></h1><p class="muted" id="caPeriod">Période en cours.</p></div><div class="heading-actions"><button class="btn btn-quiet hidden" id="objectivesBtn">🎯 Objectifs</button><button class="btn btn-danger hidden" id="resetCaBtn">⟲ Clôturer la semaine</button></div></div>
+        <div class="page-heading"><div><p class="section-kicker">PILOTAGE FINANCIER</p><h1>Chiffre d'affaires<span class="emerald">.</span></h1><p class="muted" id="caPeriod">Période en cours.</p></div><div class="heading-actions"><button class="btn btn-quiet hidden" id="objectivesBtn">🎯 Objectifs &amp; salaires</button><button class="btn btn-danger hidden" id="resetCaBtn">⟲ Clôturer la semaine</button></div></div>
         <div class="ca-hero">
           <div class="ca-total"><span class="section-kicker">CA TOTAL DE LA PÉRIODE</span><strong id="caTotal">—</strong><small id="caCount"></small><div id="caProgress"></div></div>
           <div class="ca-split">
             <div><span>Ventes</span><b id="caVentes">—</b></div>
             <div class="hidden"><span>Locations</span><b id="caLocations">—</b></div>
-            <div class="mine"><span>Mon CA</span><b id="caMine">—</b><div id="caMineProgress"></div></div>
+            <div class="mine"><span>Mon CA</span><b id="caMine">—</b><div id="caMineProgress"></div><div id="caMineSalary"></div></div>
           </div>
         </div>
         <div class="ca-profit hidden" id="caProfit">
@@ -198,8 +199,11 @@
           <div id="caChart" class="chart-wrap"></div>
         </section>
         <section class="panel hidden" id="caTeamPanel">
-          <div class="panel-heading"><div><p class="section-kicker">CLASSEMENT DE L'ÉQUIPE</p><h3>CA par employé</h3></div></div>
-          <div class="table-wrap"><table class="rank-table"><thead><tr><th>#</th><th>Employé</th><th class="num">Ventes</th><th class="num">Dossiers</th><th class="num">Total</th></tr></thead><tbody id="caTable"></tbody></table></div>
+          <div class="panel-heading"><div><p class="section-kicker">CLASSEMENT DE LA SEMAINE</p><h3>Meilleur vendeur et salaires</h3></div></div>
+          <div id="caBest"></div>
+          <div class="table-wrap"><table class="rank-table"><thead id="caThead"></thead><tbody id="caTable"></tbody></table></div>
+          <div class="pay-totals hidden" id="caPayTotals"></div>
+          <p class="hint pay-rule" id="caPayRule"></p>
         </section>
         <section class="panel hidden" id="caArchivesPanel">
           <div class="panel-heading"><div><p class="section-kicker">HISTORIQUE</p><h3>Semaines clôturées</h3></div></div>
@@ -356,11 +360,13 @@
   </div></div>
 
   <div class="modal-backdrop hidden" id="objectivesModal"><div class="modal modal-small" role="dialog" aria-modal="true" aria-labelledby="objectivesTitle">
-    <div class="modal-head"><div><p class="section-kicker">CHIFFRE D'AFFAIRES</p><h2 id="objectivesTitle">Objectifs de la semaine</h2></div><button class="close-modal" data-close="objectivesModal" aria-label="Fermer">×</button></div>
+    <div class="modal-head"><div><p class="section-kicker">CHIFFRE D'AFFAIRES</p><h2 id="objectivesTitle">Objectifs et salaires</h2></div><button class="close-modal" data-close="objectivesModal" aria-label="Fermer">×</button></div>
     <form id="objectivesForm" class="stack-form">
       <label>Objectif de CA de l'entreprise ($)<input name="entreprise" type="number" min="0" step="1" inputmode="numeric" placeholder="ex. 5000000"></label>
       <label>Objectif de CA par employé ($)<input name="employe" type="number" min="0" step="1" inputmode="numeric" placeholder="ex. 500000"></label>
-      <p class="modal-meta">Laissez vide pour ne pas afficher d'objectif. Les objectifs restent en place d'une semaine à l'autre.</p>
+      <label>Salaire maximum par semaine ($)<input name="salaire_max" type="number" min="0" step="1" inputmode="numeric" placeholder="250000"></label>
+      <label>Prime du meilleur vendeur ($)<input name="prime_meilleur" type="number" min="0" step="1" inputmode="numeric" placeholder="50000"></label>
+      <p class="modal-meta">Un vendeur qui atteint l'objectif par employé touche le salaire maximum ; en dessous, son salaire est proportionnel à son CA. Le meilleur vendeur de la semaine touche la prime en plus. Ces réglages restent en place d'une semaine à l'autre.</p>
       <p id="objectivesError" class="error" role="alert"></p>
       <div class="modal-actions"><span class="spacer"></span><button type="button" class="btn btn-quiet" data-close="objectivesModal">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
     </form>
@@ -387,18 +393,18 @@
   </div></div>
 
   <div class="modal-backdrop hidden" id="catalogModal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="catalogModalTitle">
-    <div class="modal-head"><div><p class="section-kicker">CATALOGUE</p><h2 id="catalogModalTitle">Nouveau bien</h2></div><button class="close-modal" data-close="catalogModal" aria-label="Fermer">×</button></div>
+    <div class="modal-head"><div><p class="section-kicker">VÉHICULES</p><h2 id="catalogModalTitle">Nouveau véhicule</h2></div><button class="close-modal" data-close="catalogModal" aria-label="Fermer">×</button></div>
     <form id="catalogForm"><div class="form-grid">
-      <label><span>Catégorie <i class="req">*</i></span><select name="categorie" required><option value="" disabled selected>Choisir…</option><option>Motels</option><option>Appartements</option><option>Penthouses</option><option>Maisons</option><option>Garages</option><option>Bureaux</option><option>Entrepôts</option></select></label>
-      <label><span>Nom du bien <i class="req">*</i></span><input name="nom" maxlength="100" placeholder="ex. Chambre Pink Cage, Villa Vinewood…" required></label>
-      <label>Prix de vente ($)<input name="prix_vente" type="number" min="0" step="1" inputmode="numeric" placeholder="Vide si pas en vente"></label>
-      <label>Prix de location par semaine ($)<input name="prix_location" type="number" min="0" step="1" inputmode="numeric" placeholder="Vide si pas en location"></label>
-      <div class="full-field photo-field"><span class="photo-label">Photo du bien (optionnel)</span>
+      <label><span>Type <i class="req">*</i></span><select name="categorie" required><option value="Neuf">Neuf (liste des prix)</option><option value="Occasion">Occasion (vitrine)</option></select></label>
+      <label><span>Modèle <i class="req">*</i></span><input name="nom" maxlength="100" placeholder="ex. Pegassi Zentorno" required></label>
+      <label><span>Prix ($) <i class="req">*</i></span><input name="prix_vente" type="number" min="0" step="1" inputmode="numeric" placeholder="ex. 725000" required></label>
+      <label class="full-field"><span id="catalogDescLabel">Informations</span><textarea name="description" rows="3" maxlength="800" placeholder="ex. 32 000 km, très bon état, jantes sport, peinture noire mate…"></textarea></label>
+      <div class="full-field photo-field"><span class="photo-label">Photo du véhicule (optionnel)</span>
         <div class="photo-box"><img id="catalogPhotoPreview" alt="" class="hidden"><span id="catalogPhotoEmpty">Aucune photo</span></div>
         <div class="photo-actions"><label class="btn btn-quiet file-btn">📷 Choisir une photo<input type="file" id="catalogPhotoInput" accept="image/jpeg,image/png,image/webp" hidden></label><button type="button" class="btn btn-danger-quiet hidden" id="catalogPhotoRemove">Retirer la photo</button></div>
       </div>
-      <label class="full-field check-line"><input type="checkbox" name="public" checked> Afficher ce bien sur la vitrine publique</label>
-    </div><p class="modal-meta">Le prix de location est <b>par semaine</b> : il est multiplié automatiquement par le nombre de semaines choisi (1 à 6). Laissez un prix vide si le bien n'est pas proposé à la vente ou à la location.</p><p id="catalogError" class="error" role="alert"></p>
+      <label class="full-field check-line" id="catalogPublicLine"><input type="checkbox" name="public" checked> Afficher cette occasion sur la vitrine publique</label>
+    </div><p class="modal-meta">Les véhicules <b>neufs</b> servent de liste des prix pour les ventes. Les <b>occasions</b> apparaissent en plus sur la vitrine publique avec leur photo et leurs informations (décochez la case une fois vendue, ou supprimez-la).</p><p id="catalogError" class="error" role="alert"></p>
       <div class="modal-actions"><span class="spacer"></span><button type="button" class="btn btn-quiet" data-close="catalogModal">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
     </form>
   </div></div>
@@ -427,6 +433,6 @@
   </div></div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="/assets/app.js?v=2"></script>
+  <script src="/assets/app.js?v=3"></script>
 </body>
 </html>

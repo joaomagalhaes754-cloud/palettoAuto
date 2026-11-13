@@ -5,7 +5,9 @@ Hébergé gratuitement sur **Cloudflare Workers** avec une base **D1**. Les tabl
 
 ## Fonctions
 - Comptes employés, grades personnalisables et permissions
-- Ventes de véhicules (modèle, plaque, client, remise partenaire, vendeur)
+- Ventes de véhicules (modèle choisi dans la liste des prix, plaque, client, remise partenaire, vendeur, capture d'écran obligatoire)
+- Véhicules : liste des prix des neufs + occasions affichées sur la vitrine (prix, infos, photo)
+- Classement de la semaine, prime du meilleur vendeur et échelle de salaire (réglables dans « Objectifs & salaires »)
 - Clients (avec liste noire), partenariats avec remise en %
 - Chiffre d'affaires, objectifs, graphique, clôture de la semaine et historique
 - Dépenses, bénéfice et solde du compte
