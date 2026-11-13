@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/assets/style.css?v=5">
+  <link rel="stylesheet" href="/assets/style.css?v=6">
 </head>
 <body>
   <!-- ============ VITRINE PUBLIQUE ============ -->
@@ -173,7 +173,7 @@
 
       <!-- Catalogue des biens -->
       <section class="page" id="page-catalog">
-        <div class="page-heading"><div><p class="section-kicker" id="catalogKicker">TARIFS DE LA CONCESSION</p><h1><span id="catalogTitle">Véhicules neufs</span><span class="emerald">.</span></h1><p class="muted" id="catalogDescription"></p></div><div class="heading-actions"><button class="btn btn-primary hidden" id="addCatalogBtn">＋ Nouveau véhicule</button></div></div>
+        <div class="page-heading"><div><p class="section-kicker" id="catalogKicker">TARIFS DE LA CONCESSION</p><h1><span id="catalogTitle">Véhicules neufs</span><span class="emerald">.</span></h1><p class="muted" id="catalogDescription"></p></div><div class="heading-actions"><button class="btn btn-quiet hidden" id="importCatalogBtn">⇪ Importer une liste</button><button class="btn btn-primary hidden" id="addCatalogBtn">＋ Nouveau véhicule</button></div></div>
         <div class="filters" id="catalogTabs"></div>
         <div id="catalogList" class="records-list"></div>
       </section>
@@ -393,6 +393,16 @@
     </form>
   </div></div>
 
+  <div class="modal-backdrop hidden" id="importModal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="importTitle">
+    <div class="modal-head"><div><p class="section-kicker">VÉHICULES NEUFS</p><h2 id="importTitle">Importer une liste</h2></div><button class="close-modal" data-close="importModal" aria-label="Fermer">×</button></div>
+    <form id="importForm" class="stack-form">
+      <label>Un véhicule par ligne : le modèle puis le prix<textarea name="liste" rows="12" placeholder="Pegassi Zentorno ; 725000&#10;Karin Sultan RS ; 95 000&#10;Truffade Adder - 1 000 000 $"></textarea></label>
+      <p class="modal-meta" id="importPreview">Collez la liste préparée. Si un modèle existe déjà, seul son prix est mis à jour.</p>
+      <p id="importError" class="error" role="alert"></p>
+      <div class="modal-actions"><span class="spacer"></span><button type="button" class="btn btn-quiet" data-close="importModal">Annuler</button><button class="btn btn-primary" type="submit">Importer</button></div>
+    </form>
+  </div></div>
+
   <div class="modal-backdrop hidden" id="catalogModal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="catalogModalTitle">
     <div class="modal-head"><div><p class="section-kicker">VÉHICULES</p><h2 id="catalogModalTitle">Nouveau véhicule</h2></div><button class="close-modal" data-close="catalogModal" aria-label="Fermer">×</button></div>
     <form id="catalogForm"><div class="form-grid">
@@ -434,6 +444,6 @@
   </div></div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="/assets/app.js?v=5"></script>
+  <script src="/assets/app.js?v=6"></script>
 </body>
 </html>

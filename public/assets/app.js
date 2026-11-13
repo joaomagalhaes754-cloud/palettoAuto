@@ -698,6 +698,7 @@ function renderCatalog() {
   $("#catalogKicker").textContent = occ ? "VITRINE PUBLIQUE" : "TARIFS DE LA CONCESSION";
   $("#addCatalogBtn").textContent = occ ? "＋ Nouvelle occasion" : "＋ Nouveau véhicule neuf";
   $("#addCatalogBtn").classList.toggle("hidden", !can("catalogue.gerer"));
+  $("#importCatalogBtn").classList.toggle("hidden", occ || !can("catalogue.gerer"));
   $("#vitrineBtn").classList.toggle("hidden", !can("catalogue.gerer"));
   $("#catalogDescription").textContent = can("catalogue.gerer")
     ? (occ ? "Les occasions cochées « vitrine » apparaissent sur le site public avec leur photo, leur prix et leurs informations. Elles sont aussi proposées dans les ventes."
@@ -815,6 +816,43 @@ function setCatalogPreview(data) {
   $("#catalogPhotoRemove").classList.toggle("hidden", !data);
 }
 
+function parseVehicleList(text) {
+  const items = [], bad = [];
+  String(text || "").split(/\r?\n/).forEach((line) => {
+    const l = line.trim();
+    if (!l) return;
+    const sep = l.match(/^(.*\S)\s*(?:[;\t|]|\s[-–—:=])\s*([^;\t|]*\d[^;\t|]*)$/);
+    if (sep) {
+      const p = Number(sep[2].replace(/[^\d]/g, ""));
+      if (sep[1].trim() && p > 0 && !/[a-z]{2,}/i.test(sep[2].replace(/dollars?/i, ""))) { items.push({ nom: sep[1].trim(), prix: p }); return; }
+    }
+    const m = l.match(/^(.*?)[\s;:|\t,=–—-]*\$?\s*(\d[\d\s.,'’\u00a0\u202f]*)\s*(\$|€|dollars?)?\s*$/i);
+    const nom = m ? m[1].replace(/[\s;:|,=–—-]+$/, "").trim() : "";
+    const prix = m ? Number(m[2].replace(/[^\d]/g, "")) : 0;
+    if (nom && prix > 0) items.push({ nom, prix }); else bad.push(l);
+  });
+  return { items, bad };
+}
+function updateImportPreview() {
+  const { items, bad } = parseVehicleList($("#importForm").liste.value);
+  $("#importPreview").innerHTML = items.length || bad.length
+    ? `<b>${items.length}</b> véhicule${items.length > 1 ? "s" : ""} reconnu${items.length > 1 ? "s" : ""}${bad.length ? ` • <span class="error">${bad.length} ligne${bad.length > 1 ? "s" : ""} ignorée${bad.length > 1 ? "s" : ""} (pas de prix) : ${esc(bad.slice(0, 3).join(" | "))}${bad.length > 3 ? "…" : ""}</span>` : ""}`
+    : "Collez la liste préparée. Si un modèle existe déjà, seul son prix est mis à jour.";
+}
+async function importVehicles(e) {
+  e.preventDefault();
+  const { items } = parseVehicleList(e.currentTarget.liste.value);
+  if (!items.length) { $("#importError").textContent = "Aucun véhicule reconnu : chaque ligne doit contenir un modèle et un prix."; return; }
+  const btn = e.currentTarget.querySelector("button[type=submit]");
+  setBusy(btn, true, "Import…");
+  try {
+    const r = await api("catalog/import", { method: "POST", body: { items } });
+    closeModal("importModal");
+    toast(`${r.created} ajouté(s) • ${r.updated} prix mis à jour${r.unchanged ? ` • ${r.unchanged} inchangé(s)` : ""}`);
+    await loadAll();
+  } catch (err) { $("#importError").textContent = err.message; }
+  finally { setBusy(btn, false); }
+}
 function syncCatalogForm() {
   const f = $("#catalogForm");
   const occ = f.categorie.value === "Occasion";
@@ -1735,6 +1773,9 @@ $("#addUserBtn").addEventListener("click", () => openUser());
 $("#userForm").addEventListener("submit", saveUser);
 $("#passwordForm").addEventListener("submit", changePassword);
 $("#addCatalogBtn").addEventListener("click", () => openCatalog());
+$("#importCatalogBtn").addEventListener("click", () => { $("#importForm").reset(); $("#importError").textContent = ""; updateImportPreview(); openModal("importModal"); setTimeout(() => $("#importForm").liste.focus(), 40); });
+$("#importForm").addEventListener("submit", importVehicles);
+$("#importForm").liste.addEventListener("input", updateImportPreview);
 $("#addGradeBtn").addEventListener("click", () => openGrade());
 $("#objectivesBtn").addEventListener("click", openObjectives);
 $("#soldeBtn").addEventListener("click", openSolde);

@@ -788,6 +788,33 @@ async function catalog(db, me, method, id, sub, body) {
     fail(405, "Méthode non autorisée.");
   }
   if (!can(me, "catalogue.gerer")) fail(403, "Votre grade ne permet pas de modifier le catalogue.");
+  if (method === "POST" && id === "import") {
+    const items = Array.isArray(body.items) ? body.items : [];
+    if (!items.length) fail(400, "La liste est vide.");
+    if (items.length > 1000) fail(400, "1000 véhicules maximum par import.");
+    const clean = new Map();
+    for (const it of items) {
+      const nom = cleanText(it?.nom, 100), prix = cleanMoney(it?.prix);
+      if (nom && prix > 0) clean.set(nom.toLowerCase(), { nom, prix });
+    }
+    if (!clean.size) fail(400, "Aucun véhicule valide (il faut un nom et un prix).");
+    const { results } = await db.prepare("SELECT id, nom, prix_vente FROM d8_catalog WHERE categorie = 'Neuf'").all();
+    const existing = new Map(results.map((r) => [r.nom.trim().toLowerCase(), r]));
+    const now = Date.now(), stmts = [];
+    let created = 0, updated = 0, unchanged = 0;
+    for (const [k, v] of clean) {
+      const old = existing.get(k);
+      if (old) {
+        if (old.prix_vente === v.prix) { unchanged++; continue; }
+        stmts.push(db.prepare("UPDATE d8_catalog SET prix_vente = ? WHERE id = ?").bind(v.prix, old.id)); updated++;
+      } else {
+        stmts.push(db.prepare("INSERT INTO d8_catalog (nom, prix_vente, prix_location, duree, categorie, public, description, created_at) VALUES (?, ?, 0, '', 'Neuf', 0, '', ?)").bind(v.nom, v.prix, now)); created++;
+      }
+    }
+    for (let i = 0; i < stmts.length; i += 90) await db.batch(stmts.slice(i, i + 90));
+    await logAction(db, me, "création", "Véhicules", "Import de la liste des prix", `${created} ajouté(s) • ${updated} prix mis à jour • ${unchanged} inchangé(s)`);
+    return json({ created, updated, unchanged });
+  }
   const clean = () => {
     const nom = cleanText(body.nom, 100);
     if (!nom) fail(400, "Le modèle du véhicule est obligatoire.");
