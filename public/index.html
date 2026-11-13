@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#060b12">
+  <meta name="theme-color" content="#0d0c0b">
   <meta name="robots" content="noindex, nofollow">
   <meta name="description" content="Paletto Auto — Concessionnaire automobile à Los Santos.">
   <title>Paletto Auto | Concessionnaire</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23060b11'/%3E%3Crect x='6' y='6' width='52' height='52' fill='none' stroke='%23376096' stroke-width='3'/%3E%3Ctext x='32' y='42' text-anchor='middle' font-family='Georgia,serif' font-size='24' fill='%23a5c4e9'%3EPA%3C/text%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%230c0c0b'/%3E%3Crect x='6' y='6' width='52' height='52' fill='none' stroke='%238f773e' stroke-width='3'/%3E%3Ctext x='32' y='42' text-anchor='middle' font-family='Georgia,serif' font-size='24' fill='%23dbd1b3'%3EPA%3C/text%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/assets/style.css?v=3">
+  <link rel="stylesheet" href="/assets/style.css?v=4">
 </head>
 <body>
   <!-- ============ VITRINE PUBLIQUE ============ -->
@@ -106,7 +106,8 @@
         <button class="side-link" data-page="dashboard"><span class="side-icon">▦</span> Tableau de bord</button>
         <button class="side-link" data-page="ventes"><span class="side-icon">◈</span> Ventes</button>
         <button class="side-link" data-page="clients"><span class="side-icon">♙</span> Clients</button>
-        <button class="side-link" data-page="catalog"><span class="side-icon">⛟</span> Véhicules</button>
+        <button class="side-link" data-page="catalog"><span class="side-icon">⛟</span> Véhicules neufs</button>
+        <button class="side-link" data-page="occasions"><span class="side-icon">⟲</span> Occasions</button>
         <button class="side-link" data-page="partenariats"><span class="side-icon">◇</span> Partenariats</button>
         <button class="side-link hidden" id="requestsNav" data-page="requests"><span class="side-icon">✉</span> Demandes <span class="nav-badge hidden" id="requestsBadge"></span></button>
       </nav>
@@ -172,7 +173,7 @@
 
       <!-- Catalogue des biens -->
       <section class="page" id="page-catalog">
-        <div class="page-heading"><div><p class="section-kicker">TARIFS DE LA CONCESSION</p><h1>Véhicules<span class="emerald">.</span></h1><p class="muted" id="catalogDescription"></p></div><div class="heading-actions"><button class="btn btn-primary hidden" id="addCatalogBtn">＋ Nouveau véhicule</button></div></div>
+        <div class="page-heading"><div><p class="section-kicker" id="catalogKicker">TARIFS DE LA CONCESSION</p><h1><span id="catalogTitle">Véhicules neufs</span><span class="emerald">.</span></h1><p class="muted" id="catalogDescription"></p></div><div class="heading-actions"><button class="btn btn-primary hidden" id="addCatalogBtn">＋ Nouveau véhicule</button></div></div>
         <div class="filters" id="catalogTabs"></div>
         <div id="catalogList" class="records-list"></div>
       </section>
@@ -433,6 +434,6 @@
   </div></div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="/assets/app.js?v=3"></script>
+  <script src="/assets/app.js?v=4"></script>
 </body>
 </html>

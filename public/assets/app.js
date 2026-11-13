@@ -203,7 +203,7 @@ async function enterApp() {
 }
 
 const canRequests = () => can("rdv.gerer") || can("recrutement.gerer");
-const isValidPage = (p) => (p === "requests" && canRequests()) || ["dashboard", "ca", "account", "events", "catalog", ...Object.keys(TYPES).filter(typeAllowed)].includes(p) || (p === "journal" && can("journal.voir")) || (p === "users" && canSeeUsers()) || (p === "grades" && can("grades.gerer"));
+const isValidPage = (p) => (p === "requests" && canRequests()) || ["dashboard", "ca", "account", "events", "catalog", "occasions", ...Object.keys(TYPES).filter(typeAllowed)].includes(p) || (p === "journal" && can("journal.voir")) || (p === "users" && canSeeUsers()) || (p === "grades" && can("grades.gerer"));
 
 // Affiche ou masque les menus et boutons selon les permissions du grade
 function applyPermissions() {
@@ -264,7 +264,7 @@ function render() {
   if (state.page === "ca") renderCA();
   if (state.page === "users") renderUsers();
   if (state.page === "account") renderAccount();
-  if (state.page === "catalog") renderCatalog();
+  if (state.page === "catalog" || state.page === "occasions") renderCatalog();
   if (state.page === "grades") renderGrades();
   if (state.page === "journal") renderJournal();
   if (state.page === "requests") renderRequests();
@@ -283,9 +283,9 @@ function go(page, doRender = true) {
     state.type = page;
   }
   $$(".page").forEach((p) => p.classList.remove("active"));
-  $(`#page-${TYPES[page] ? "records" : page}`).classList.add("active");
+  $(`#page-${TYPES[page] ? "records" : page === "occasions" ? "catalog" : page}`).classList.add("active");
   $$(".side-link").forEach((b) => b.classList.toggle("active", b.dataset.page === page));
-  const crumbs = { requests: "DEMANDES", events: "ÉVÉNEMENTS", journal: "JOURNAL D'ACTIVITÉ", grades: "GRADES & PERMISSIONS", dashboard: "TABLEAU DE BORD", catalog: "VÉHICULES", ca: "CHIFFRE D'AFFAIRES", users: "EMPLOYÉS", account: "MON COMPTE" };
+  const crumbs = { requests: "DEMANDES", events: "ÉVÉNEMENTS", journal: "JOURNAL D'ACTIVITÉ", grades: "GRADES & PERMISSIONS", dashboard: "TABLEAU DE BORD", catalog: "VÉHICULES NEUFS", occasions: "OCCASIONS", ca: "CHIFFRE D'AFFAIRES", users: "EMPLOYÉS", account: "MON COMPTE" };
   $("#crumb").textContent = crumbs[page] || TYPES[page].label.toUpperCase();
   if (location.hash.slice(1) !== page) history.replaceState(null, "", page === "dashboard" ? location.pathname : `#${page}`);
   closeSidebar();
@@ -694,11 +694,17 @@ async function deleteUser(username) {
 /* ---------- catalogue des biens ---------- */
 
 function renderCatalog() {
+  const occ = state.page === "occasions";
+  state.catFilter = occ ? "Occasion" : "Neuf";
+  $("#catalogTitle").textContent = occ ? "Occasions" : "Véhicules neufs";
+  $("#catalogKicker").textContent = occ ? "VITRINE PUBLIQUE" : "TARIFS DE LA CONCESSION";
+  $("#addCatalogBtn").textContent = occ ? "＋ Nouvelle occasion" : "＋ Nouveau véhicule neuf";
   $("#addCatalogBtn").classList.toggle("hidden", !can("catalogue.gerer"));
   $("#vitrineBtn").classList.toggle("hidden", !can("catalogue.gerer"));
   $("#catalogDescription").textContent = can("catalogue.gerer")
-    ? "Les prix des véhicules neufs se remplissent automatiquement dans les ventes. Les occasions cochées « vitrine » apparaissent sur le site public."
-    : "Prix officiels de la concession. Votre grade ne permet pas de les modifier.";
+    ? (occ ? "Les occasions cochées « vitrine » apparaissent sur le site public avec leur photo, leur prix et leurs informations. Elles sont aussi proposées dans les ventes."
+           : "Liste des prix des véhicules neufs : ils se remplissent automatiquement quand on enregistre une vente.")
+    : (occ ? "Occasions en stock. Votre grade ne permet pas de les modifier." : "Prix officiels de la concession. Votre grade ne permet pas de les modifier.");
   const counts = {};
   state.catalog.forEach((c) => (counts[catOf(c)] = (counts[catOf(c)] || 0) + 1));
   const cats = [...CATEGORIES, ...(counts["Non classé"] ? ["Non classé"] : [])];
@@ -717,7 +723,9 @@ function renderCatalog() {
     if (!group.length) return state.catFilter === "all" ? "" : `<div class="empty-state">Aucun bien dans « ${esc(cat)} » pour l'instant.</div>`;
     return `${state.catFilter === "all" ? `<h4 class="cat-heading">${esc(cat)} <span>${group.length}</span></h4>` : ""}${group.map(card).join("")}`;
   }).join("");
-  $("#catalogList").innerHTML = state.catalog.length ? html : `<div class="empty-state">Aucun véhicule pour l'instant.${can("catalogue.gerer") ? " Cliquez sur « Nouveau véhicule » pour ajouter un modèle neuf avec son prix, ou une occasion à mettre en vitrine." : ""}</div>`;
+  $("#catalogTabs").innerHTML = "";
+  const list = state.catalog.filter((c) => catOf(c) === state.catFilter);
+  $("#catalogList").innerHTML = list.length ? list.map(card).join("") : `<div class="empty-state">${occ ? "Aucune occasion en stock." : "Aucun véhicule neuf pour l'instant."}${can("catalogue.gerer") ? ` Cliquez sur « ${occ ? "Nouvelle occasion" : "Nouveau véhicule neuf"} » pour en ajouter.` : ""}</div>`;
   fillPhotos($("#catalogList"));
 }
 
@@ -846,7 +854,7 @@ function openCatalog(id = null) {
   state.editingCatalog = c?.id || null;
   const f = $("#catalogForm");
   f.reset();
-  $("#catalogModalTitle").textContent = c ? `Modifier ${c.nom}` : "Nouveau véhicule";
+  $("#catalogModalTitle").textContent = c ? `Modifier ${c.nom}` : (state.page === "occasions" ? "Nouvelle occasion" : "Nouveau véhicule neuf");
   f.nom.value = c?.nom || "";
   f.public.checked = !c || c.public !== 0;
   f.categorie.value = c && CATEGORIES.includes(c.categorie) ? c.categorie : (CATEGORIES.includes(state.catFilter) ? state.catFilter : "Neuf");
@@ -1266,7 +1274,7 @@ async function boot() {
     const { needsSetup } = await api("setup");
     if (needsSetup) return showLogin(true);
     const h = location.hash.slice(1);
-    if (h === "espace" || ["dashboard", "ca", "account", "catalog", "users", "grades", "journal", ...Object.keys(TYPES)].includes(h)) showLogin(false);
+    if (h === "espace" || ["dashboard", "ca", "account", "catalog", "occasions", "users", "grades", "journal", ...Object.keys(TYPES)].includes(h)) showLogin(false);
     else showPublic();
   } catch (e) {
     showLogin(false, e.message);
