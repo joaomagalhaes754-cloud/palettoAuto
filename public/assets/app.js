@@ -34,16 +34,14 @@ const TYPES = {
     desc: "Enregistrez les ventes de véhicules conclues : chacune compte immédiatement dans le CA. Choisissez un partenariat pour appliquer automatiquement sa remise.",
     fields: [
       { key: "vehicule", label: "Véhicule (modèle)", type: "vehicle", required: true, placeholder: "Tapez pour chercher dans la liste…", full: true },
-      { key: "plaque", label: "Plaque d'immatriculation", type: "text", placeholder: "ex. 12ABC345" },
       { key: "client", label: "Client", type: "client", placeholder: "Nom du client" },
       { key: "prix_base", label: "Prix de base ($)", type: "money" },
       { key: "partenariat", label: "Partenariat (remise)", type: "partner" },
       { key: "prix", label: "Prix de vente final ($)", type: "money", required: true },
       { key: "agent", label: "Vendeur responsable", type: "user" },
-      { key: "notes", label: "Notes", type: "long", placeholder: "Options, reprise, conditions…" },
     ],
     title: (d) => d.vehicule || d.bien, amount: "prix",
-    sub: (d) => [d.plaque && `Plaque ${d.plaque}`, d.client && `Client : ${d.client}`, d.partenariat && `Partenaire : ${d.partenariat}${d.remise ? ` (−${d.remise} %)` : ""}`, d.notes].filter(Boolean).join(" • "),
+    sub: (d) => [d.client && `Client : ${d.client}`, d.partenariat && `Partenaire : ${d.partenariat}${d.remise ? ` (−${d.remise} %)` : ""}`].filter(Boolean).join(" • "),
   },
   clients: {
     label: "Clients", singular: "client", kicker: "PORTEFEUILLE",
@@ -713,7 +711,7 @@ function renderCatalog() {
     .map(([v, l]) => `<button class="chip ${state.catFilter === v ? "active" : ""}" data-cat-filter="${esc(v)}">${esc(l)}</button>`).join("");
   const card = (c) => `
     <article class="record-card">
-      <div class="record-main user-main"><div class="cat-thumb" ${c.photo_at ? `data-view-photo="${c.id}:${c.photo_at}" data-photo-title="${esc(c.nom)}" title="Agrandir"` : ""}>${c.photo_at ? `<img data-photo="${c.id}:${c.photo_at}" alt="">` : "<span>❖</span>"}</div><div><div class="record-title"><b>${esc(c.nom)}</b><span class="badge">${esc(catOf(c))}</span>${c.categorie === "Occasion" ? (c.public === 0 ? `<span class="badge bad">Masquée de la vitrine</span>` : `<span class="badge ok">En vitrine</span>`) : ""}</div>
+      <div class="record-main user-main">${c.categorie === "Occasion" ? `<div class="cat-thumb" ${c.photo_at ? `data-view-photo="${c.id}:${c.photo_at}" data-photo-title="${esc(c.nom)}" title="Agrandir"` : ""}>${c.photo_at ? `<img data-photo="${c.id}:${c.photo_at}" alt="">` : "<span>❖</span>"}</div>` : ""}<div><div class="record-title"><b>${esc(c.nom)}</b><span class="badge">${esc(catOf(c))}</span>${c.categorie === "Occasion" ? (c.public === 0 ? `<span class="badge bad">Masquée de la vitrine</span>` : `<span class="badge ok">En vitrine</span>`) : ""}</div>
         <p>Prix : <b>${money(c.prix_vente)}</b>${c.description ? ` • ${esc(c.description)}` : ""}</p></div></div>
       <div class="record-meta"><div class="record-actions">${can("catalogue.gerer") ? `<button class="mini-btn" data-cat-edit="${c.id}">Modifier</button><button class="mini-btn danger" data-cat-delete="${c.id}">Supprimer</button>` : ""}</div></div>
     </article>`;
@@ -821,7 +819,9 @@ function syncCatalogForm() {
   const f = $("#catalogForm");
   const occ = f.categorie.value === "Occasion";
   $("#catalogPublicLine").classList.toggle("hidden", !occ);
-  $("#catalogDescLabel").textContent = occ ? "Informations (affichées sur la vitrine)" : "Informations (facultatif)";
+  $("#catalogDescField").classList.toggle("hidden", !occ);
+  $("#catalogPhotoField").classList.toggle("hidden", !occ);
+  $("#catalogDescLabel").textContent = "Informations (affichées sur la vitrine)";
 }
 function vehicleOf(name) {
   const n = String(name || "").trim().toLowerCase();
@@ -876,7 +876,8 @@ function openCatalog(id = null) {
 async function saveCatalog(e) {
   e.preventDefault();
   const f = e.currentTarget;
-  const body = { nom: f.nom.value.trim(), categorie: f.categorie.value, public: f.public.checked, prix_vente: f.prix_vente.value ? Number(f.prix_vente.value) : 0, description: f.description.value.trim() };
+  const occ = f.categorie.value === "Occasion";
+  const body = { nom: f.nom.value.trim(), categorie: f.categorie.value, public: f.public.checked, prix_vente: f.prix_vente.value ? Number(f.prix_vente.value) : 0, description: occ ? f.description.value.trim() : "" };
   const btn = f.querySelector("button[type=submit]");
   setBusy(btn, true, "Enregistrement…");
   try {
@@ -884,7 +885,8 @@ async function saveCatalog(e) {
     if (id) await api(`catalog/${id}`, { method: "PUT", body });
     else id = (await api("catalog", { method: "POST", body })).id;
     const ph = state.catalogPhoto;
-    if (ph.changed && ph.data) await api(`catalog/${id}/photo`, { method: "PUT", body: { data: ph.data } });
+    if (!occ && ph.had) await api(`catalog/${id}/photo`, { method: "DELETE" });
+    else if (ph.changed && ph.data) await api(`catalog/${id}/photo`, { method: "PUT", body: { data: ph.data } });
     else if (ph.changed && ph.had) await api(`catalog/${id}/photo`, { method: "DELETE" });
     closeModal("catalogModal");
     toast("Véhicule enregistré.");
@@ -1032,7 +1034,7 @@ function openClient(id) {
     <p class="section-kicker">HISTORIQUE</p>
     <div class="client-history">${hist.length ? hist.map((x) => `
       <button class="recent-item" data-client-open="${x.type}:${x.id}">
-        <div><b>${esc(TYPES.ventes.title(x.data))}</b><small>${x.data.plaque ? `Plaque ${esc(x.data.plaque)}` : "Achat"} • ${esc(userName(x.agent))} • ${dateLabel(x.created_at)}</small></div>
+        <div><b>${esc(TYPES.ventes.title(x.data))}</b><small>${x.data.partenariat ? `Partenaire ${esc(x.data.partenariat)}` : "Achat"} • ${esc(userName(x.agent))} • ${dateLabel(x.created_at)}</small></div>
         <span class="recent-right"><span class="amount-sm">${money(x.amount)}</span><span class="badge">${x.type === "ventes" ? "achat" : "location"}</span></span>
       </button>`).join("") : `<div class="empty-state">Aucun achat pour ce client. Les dossiers sont reliés par le nom exact du client.</div>`}</div>`;
   $("#clientEditBtn").textContent = canEdit(c, "clients") ? "Modifier la fiche" : "Voir la fiche";

@@ -25,7 +25,7 @@ const PBKDF2_ITERATIONS = 100000; // maximum autorisé par Cloudflare Workers
 // Structure de chaque type de dossier (le serveur fait foi).
 const SCHEMA = {
   ventes: {
-    fields: { vehicule: "text", plaque: "text", client: "text", agent: "user", prix_base: "money", partenariat: "text", remise: "percent", prix: "money", notes: "long" },
+    fields: { vehicule: "text", client: "text", agent: "user", prix_base: "money", partenariat: "text", remise: "percent", prix: "money" },
     required: ["vehicule", "prix"],
     amount: "prix",
     counted: true, // une vente est enregistrée uniquement quand elle est conclue
@@ -796,7 +796,7 @@ async function catalog(db, me, method, id, sub, body) {
     if (!vente) fail(400, "Indiquez le prix du véhicule.");
     const categorie = String(body.categorie || "");
     if (!CATEGORIES.includes(categorie)) fail(400, "Choisissez : neuf ou occasion.");
-    return { nom, vente, location, categorie, description: cleanText(body.description, 800), duree: "", visible: categorie === "Occasion" && !(body.public === false || body.public === 0) ? 1 : 0 };
+    return { nom, vente, location, categorie, description: categorie === "Occasion" ? cleanText(body.description, 800) : "", duree: "", visible: categorie === "Occasion" && !(body.public === false || body.public === 0) ? 1 : 0 };
   };
   if (method === "POST" && !id) {
     const c = clean();

@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/assets/style.css?v=4">
+  <link rel="stylesheet" href="/assets/style.css?v=5">
 </head>
 <body>
   <!-- ============ VITRINE PUBLIQUE ============ -->
@@ -399,13 +399,13 @@
       <label><span>Type <i class="req">*</i></span><select name="categorie" required><option value="Neuf">Neuf (liste des prix)</option><option value="Occasion">Occasion (vitrine)</option></select></label>
       <label><span>Modèle <i class="req">*</i></span><input name="nom" maxlength="100" placeholder="ex. Pegassi Zentorno" required></label>
       <label><span>Prix ($) <i class="req">*</i></span><input name="prix_vente" type="number" min="0" step="1" inputmode="numeric" placeholder="ex. 725000" required></label>
-      <label class="full-field"><span id="catalogDescLabel">Informations</span><textarea name="description" rows="3" maxlength="800" placeholder="ex. 32 000 km, très bon état, jantes sport, peinture noire mate…"></textarea></label>
-      <div class="full-field photo-field"><span class="photo-label">Photo du véhicule (optionnel)</span>
+      <label class="full-field" id="catalogDescField"><span id="catalogDescLabel">Informations</span><textarea name="description" rows="3" maxlength="800" placeholder="ex. 32 000 km, très bon état, jantes sport, peinture noire mate…"></textarea></label>
+      <div class="full-field photo-field" id="catalogPhotoField"><span class="photo-label">Photo du véhicule (optionnel)</span>
         <div class="photo-box"><img id="catalogPhotoPreview" alt="" class="hidden"><span id="catalogPhotoEmpty">Aucune photo</span></div>
         <div class="photo-actions"><label class="btn btn-quiet file-btn">📷 Choisir une photo<input type="file" id="catalogPhotoInput" accept="image/jpeg,image/png,image/webp" hidden></label><button type="button" class="btn btn-danger-quiet hidden" id="catalogPhotoRemove">Retirer la photo</button></div>
       </div>
       <label class="full-field check-line" id="catalogPublicLine"><input type="checkbox" name="public" checked> Afficher cette occasion sur la vitrine publique</label>
-    </div><p class="modal-meta">Les véhicules <b>neufs</b> servent de liste des prix pour les ventes. Les <b>occasions</b> apparaissent en plus sur la vitrine publique avec leur photo et leurs informations (décochez la case une fois vendue, ou supprimez-la).</p><p id="catalogError" class="error" role="alert"></p>
+    </div><p class="modal-meta">Les véhicules <b>neufs</b> n'ont besoin que du modèle et du prix : ils servent de liste des prix pour les ventes. Les <b>occasions</b> apparaissent en plus sur la vitrine publique avec leur photo et leurs informations (décochez la case une fois vendue, ou supprimez-la).</p><p id="catalogError" class="error" role="alert"></p>
       <div class="modal-actions"><span class="spacer"></span><button type="button" class="btn btn-quiet" data-close="catalogModal">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
     </form>
   </div></div>
@@ -434,6 +434,6 @@
   </div></div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="/assets/app.js?v=4"></script>
+  <script src="/assets/app.js?v=5"></script>
 </body>
 </html>
