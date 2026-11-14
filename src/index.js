@@ -4,6 +4,7 @@
  * - le reste → les fichiers du dossier public/
  */
 import { onRequest } from "../functions/api/[[path]].js";
+import { handleDiscord } from "../functions/discord.js";
 
 export default {
   async fetch(request, env, ctx) {
@@ -12,6 +13,7 @@ export default {
       const path = url.pathname.slice(5).split("/").filter(Boolean).map((p) => {
         try { return decodeURIComponent(p); } catch { return p; }
       });
+      if (path[0] === "discord") return handleDiscord(request, env, path); // bot Discord « avis clients »
       return onRequest({ request, env, params: { path }, waitUntil: ctx.waitUntil.bind(ctx) });
     }
     return env.ASSETS.fetch(request);

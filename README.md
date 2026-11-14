@@ -31,3 +31,12 @@ Hébergé gratuitement sur **Cloudflare Workers** avec une base **D1**. Les tabl
 | `must have a valid database_id` | ID manquant ou faux dans `wrangler.jsonc`, ou build lancé sur une ancienne version |
 | « Something went wrong… can't process that file » (GitHub) | Le zip n'a pas été extrait avant l'envoi |
 | 404 sur `/api/...` | Les fichiers ne sont pas à la racine du dépôt |
+
+## Bot Discord « avis clients » (/avis)
+Le bot tourne dans ce même Worker (adresse `/api/discord`). Mise en place :
+1. https://discord.com/developers/applications → *New Application* → copier **Application ID** et **Public Key** ; onglet *Bot* → *Reset Token* → copier le **token**.
+2. Cloudflare → Worker → *Settings* → *Variables and Secrets* → ajouter 3 **Secrets** : `DISCORD_APPLICATION_ID`, `DISCORD_PUBLIC_KEY`, `DISCORD_BOT_TOKEN`.
+3. Ouvrir `https://<votre-site>/api/discord/setup` → « Commande /avis enregistrée ».
+4. Portail Discord → *General Information* → *Interactions Endpoint URL* : `https://<votre-site>/api/discord` → *Save Changes*.
+5. Inviter le bot : `https://discord.com/oauth2/authorize?client_id=<APPLICATION_ID>&scope=applications.commands`.
+6. (Conseillé) Paramètres du serveur → *Intégrations* → le bot → n'autoriser `/avis` que dans le salon des avis.
