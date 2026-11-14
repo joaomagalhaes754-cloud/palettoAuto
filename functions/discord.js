@@ -48,6 +48,7 @@ export const ROLE_COMMAND = {
   default_member_permissions: "268435456", // Gérer les rôles
   options: [
     { type: 7, name: "salon", description: "Salon (réservé à l'équipe) où arrivent les demandes", required: true, channel_types: [0] },
+    { type: 8, name: "validateur", description: "Seul ce rôle (et les administrateurs) peut accepter ou refuser", required: true },
     { type: 8, name: "role1", description: "Rôle pouvant être demandé", required: true },
     ...[2, 3, 4, 5].map((n) => ({ type: 8, name: `role${n}`, description: "Autre rôle pouvant être demandé", required: false })),
   ],
@@ -153,7 +154,8 @@ function rolePanel(interaction) {
   const resolved = interaction.data.resolved?.roles || {};
   const ids = [...new Set(["role1", "role2", "role3", "role4", "role5"].map((k) => opts[k]).filter((id) => SNOW.test(String(id || ""))))];
   const roles = ids.map((id) => ({ id, name: resolved[id]?.name || "Rôle" })).filter((r) => r.name !== "@everyone" && r.id !== interaction.guild_id);
-  if (!roles.length || !SNOW.test(String(opts.salon || ""))) return null;
+  const valid = String(opts.validateur || "");
+  if (!roles.length || !SNOW.test(String(opts.salon || "")) || !SNOW.test(valid) || valid === interaction.guild_id) return null;
   return {
     embeds: [{
       title: "🎭 Demande de rôle",
@@ -162,23 +164,23 @@ function rolePanel(interaction) {
       fields: [{ name: "Rôles disponibles", value: roles.map((r) => `<@&${r.id}>`).join("\n") }],
     }],
     components: [{ type: 1, components: [{
-      type: 3, custom_id: `r_pick:${opts.salon}`, placeholder: "Choisir un rôle…", min_values: 1, max_values: 1,
+      type: 3, custom_id: `r_pick:${opts.salon}:${valid}`, placeholder: "Choisir un rôle…", min_values: 1, max_values: 1,
       options: roles.map((r) => ({ label: r.name.slice(0, 100), value: r.id })),
     }] }],
     allowed_mentions: { parse: [] },
   };
 }
 
-const roleModal = (roleId, salon, label) => ({
+const roleModal = (roleId, salon, valid, label) => ({
   type: 9,
   data: {
-    custom_id: `r_modal:${roleId}:${salon}`,
+    custom_id: `r_modal:${roleId}:${salon}:${valid}`,
     title: `Demande : ${label}`.slice(0, 45),
     components: [{ type: 1, components: [{ type: 4, custom_id: "raison", label: "Pourquoi souhaitez-vous ce rôle ?", style: 2, min_length: 3, max_length: 500, required: true, placeholder: "ex. Je suis vendeur chez Paletto Auto depuis le 12/11" }] }],
   },
 });
 
-async function sendRoleRequest(env, interaction, roleId, salon) {
+async function sendRoleRequest(env, interaction, roleId, salon, valid) {
   const user = interaction.member?.user || {};
   if ((interaction.member?.roles || []).includes(roleId)) return editReply(env, interaction, "Vous avez déjà ce rôle.");
   const raison = (interaction.data.components || []).flatMap((r) => r.components || []).find((c) => c.custom_id === "raison")?.value;
@@ -191,12 +193,13 @@ async function sendRoleRequest(env, interaction, roleId, salon) {
           { name: "Membre", value: `<@${user.id}> (${safe(user.global_name || user.username, 80)})`, inline: true },
           { name: "Rôle demandé", value: `<@&${roleId}>`, inline: true },
           { name: "Raison", value: safe(raison, 500) || "—" },
+          { name: "Peut valider", value: `<@&${valid}> et les administrateurs` },
         ],
         timestamp: new Date().toISOString(),
       }],
       components: [{ type: 1, components: [
-        { type: 2, style: 3, label: "Accepter", emoji: { name: "✅" }, custom_id: `r_ok:${user.id}:${roleId}` },
-        { type: 2, style: 4, label: "Refuser", emoji: { name: "✖️" }, custom_id: `r_no:${user.id}:${roleId}` },
+        { type: 2, style: 3, label: "Accepter", emoji: { name: "✅" }, custom_id: `r_ok:${user.id}:${roleId}:${valid}` },
+        { type: 2, style: 4, label: "Refuser", emoji: { name: "✖️" }, custom_id: `r_no:${user.id}:${roleId}:${valid}` },
       ] }],
       allowed_mentions: { parse: [] },
     });
@@ -334,8 +337,8 @@ export async function handleDiscord(request, env, path, ctx) {
     return json({ type: 5, data: { flags: 64 } });
   }
   const cid = String(interaction.data?.custom_id || "");
-  const [kind, a = "0", b = "0"] = cid.split(":");
-  if (![a, b].every((x) => x === "0" || SNOW.test(x))) return ephemeral("Bouton invalide.");
+  const [kind, a = "0", b = "0", c = "0"] = cid.split(":");
+  if (![a, b, c].every((x) => x === "0" || SNOW.test(x))) return ephemeral("Bouton invalide.");
   if (interaction.type === 3 && kind === "t_open") return json(ticketModal(a, b));
   if (interaction.type === 5 && kind === "t_modal") {
     ctx.waitUntil(openTicket(env, interaction, a, b));
@@ -344,7 +347,7 @@ export async function handleDiscord(request, env, path, ctx) {
   if (interaction.type === 2 && interaction.data?.name === "role-panel") {
     if (!env.DISCORD_BOT_TOKEN) return ephemeral("Le token du bot n'est pas configuré.");
     const panel = rolePanel(interaction);
-    if (!panel) return ephemeral("Choisissez au moins un rôle valide (pas @everyone) et un salon.");
+    if (!panel) return ephemeral("Choisissez un salon, un rôle validateur et au moins un rôle demandable (pas @everyone).");
     ctx.waitUntil(discordApi(env, "POST", `/channels/${interaction.channel_id}/messages`, panel)
       .then(() => editReply(env, interaction, "✅ Panneau de demande de rôles publié dans ce salon."))
       .catch((e) => editReply(env, interaction, `❌ Impossible de publier le panneau : ${explain(e)}`)));
@@ -355,15 +358,17 @@ export async function handleDiscord(request, env, path, ctx) {
     if (!SNOW.test(roleId)) return ephemeral("Rôle invalide.");
     if ((interaction.member?.roles || []).includes(roleId)) return ephemeral("Vous avez déjà ce rôle.");
     const label = (interaction.message?.components || []).flatMap((r) => r.components || []).flatMap((c) => c.options || []).find((o) => o.value === roleId)?.label || "rôle";
-    return json(roleModal(roleId, a, label));
+    return json(roleModal(roleId, a, b, label));
   }
   if (interaction.type === 5 && kind === "r_modal") {
-    ctx.waitUntil(sendRoleRequest(env, interaction, a, b));
+    ctx.waitUntil(sendRoleRequest(env, interaction, a, b, c));
     return json({ type: 5, data: { flags: 64 } });
   }
   if (interaction.type === 3 && (kind === "r_ok" || kind === "r_no")) {
     const perms = BigInt(interaction.member?.permissions || "0");
-    if ((perms & (P.MANAGE_ROLES | P.ADMIN)) === 0n) return ephemeral("Il faut la permission « Gérer les rôles » pour traiter les demandes.");
+    const isAdmin = (perms & P.ADMIN) !== 0n;
+    const isValidator = c !== "0" && (interaction.member?.roles || []).includes(c);
+    if (!isAdmin && !isValidator) return ephemeral(c !== "0" ? `Seuls les membres <@&${c}> et les administrateurs peuvent accepter ou refuser cette demande.` : "Seuls les administrateurs peuvent traiter cette demande.");
     ctx.waitUntil(decideRole(env, interaction, a, b, kind === "r_ok"));
     return json({ type: 6 });
   }

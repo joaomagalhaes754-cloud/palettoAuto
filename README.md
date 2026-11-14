@@ -47,6 +47,6 @@ Le bot tourne dans ce même Worker (adresse `/api/discord`). Mise en place :
 - Le bouton « Ouvrir un ticket » crée un salon privé (client + rôle de l'équipe). « Fermer le ticket » le supprime (auteur, équipe ou admins).
 
 ### Demandes de rôle
-- `/role-panel` (réservé à « Gérer les rôles ») : choisir le **salon de l'équipe** où arrivent les demandes et jusqu'à 5 rôles demandables.
+- `/role-panel` (réservé à « Gérer les rôles ») : choisir le **salon de l'équipe** où arrivent les demandes, le **rôle validateur** (seul ce rôle et les administrateurs peuvent accepter/refuser) et jusqu'à 5 rôles demandables.
 - Le membre choisit un rôle dans la liste et explique pourquoi ; l'équipe reçoit la demande avec **Accepter** / **Refuser**. Le membre reçoit la réponse en MP.
 - Le rôle du bot doit être **au-dessus** des rôles qu'il donne (Paramètres du serveur → Rôles).
