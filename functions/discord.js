@@ -1,5 +1,5 @@
 /**
- * Bot Discord de Paletto Auto : avis clients (/avis) et tickets (/ticket-panel + boutons).
+ * Bot Discord de Paletto Auto : avis clients (/avis), tickets (/ticket-panel) et demandes de rôle (/role-panel).
  *
  * - POST /api/discord        → reçoit les commandes et les clics envoyés par Discord (Interactions Endpoint URL)
  * - GET  /api/discord/setup  → enregistre (ou met à jour) les commandes auprès de Discord
@@ -41,10 +41,21 @@ export const TICKET_COMMAND = {
     { type: 7, name: "categorie", description: "Catégorie où créer les salons de ticket", required: false, channel_types: [4] },
   ],
 };
-export const COMMANDS = [AVIS_COMMAND, TICKET_COMMAND];
+export const ROLE_COMMAND = {
+  name: "role-panel",
+  description: "Publier le panneau de demande de rôles dans ce salon",
+  dm_permission: false,
+  default_member_permissions: "268435456", // Gérer les rôles
+  options: [
+    { type: 7, name: "salon", description: "Salon (réservé à l'équipe) où arrivent les demandes", required: true, channel_types: [0] },
+    { type: 8, name: "role1", description: "Rôle pouvant être demandé", required: true },
+    ...[2, 3, 4, 5].map((n) => ({ type: 8, name: `role${n}`, description: "Autre rôle pouvant être demandé", required: false })),
+  ],
+};
+export const COMMANDS = [AVIS_COMMAND, TICKET_COMMAND, ROLE_COMMAND];
 
 // Permissions Discord (bits)
-const P = { ADMIN: 1n << 3n, MANAGE_CHANNELS: 1n << 4n, VIEW: 1n << 10n, SEND: 1n << 11n, EMBED: 1n << 14n, ATTACH: 1n << 15n, HISTORY: 1n << 16n };
+const P = { MANAGE_ROLES: 1n << 28n, ADMIN: 1n << 3n, MANAGE_CHANNELS: 1n << 4n, VIEW: 1n << 10n, SEND: 1n << 11n, EMBED: 1n << 14n, ATTACH: 1n << 15n, HISTORY: 1n << 16n };
 const MEMBER_ALLOW = String(P.VIEW | P.SEND | P.EMBED | P.ATTACH | P.HISTORY);
 export const BOT_PERMISSIONS = String(P.MANAGE_CHANNELS | P.VIEW | P.SEND | P.EMBED | P.ATTACH | P.HISTORY | (1n << 28n)); // + Gérer les rôles
 
@@ -136,6 +147,95 @@ async function openTicket(env, interaction, cat, role) {
   }
 }
 
+// ----- Demandes de rôle -----
+function rolePanel(interaction) {
+  const opts = Object.fromEntries((interaction.data.options || []).map((o) => [o.name, o.value]));
+  const resolved = interaction.data.resolved?.roles || {};
+  const ids = [...new Set(["role1", "role2", "role3", "role4", "role5"].map((k) => opts[k]).filter((id) => SNOW.test(String(id || ""))))];
+  const roles = ids.map((id) => ({ id, name: resolved[id]?.name || "Rôle" })).filter((r) => r.name !== "@everyone" && r.id !== interaction.guild_id);
+  if (!roles.length || !SNOW.test(String(opts.salon || ""))) return null;
+  return {
+    embeds: [{
+      title: "🎭 Demande de rôle",
+      color: GOLD,
+      description: "Choisissez le rôle que vous souhaitez dans la liste ci-dessous et expliquez pourquoi.\nVotre demande sera examinée par l'équipe : vous recevrez la réponse en message privé.",
+      fields: [{ name: "Rôles disponibles", value: roles.map((r) => `<@&${r.id}>`).join("\n") }],
+    }],
+    components: [{ type: 1, components: [{
+      type: 3, custom_id: `r_pick:${opts.salon}`, placeholder: "Choisir un rôle…", min_values: 1, max_values: 1,
+      options: roles.map((r) => ({ label: r.name.slice(0, 100), value: r.id })),
+    }] }],
+    allowed_mentions: { parse: [] },
+  };
+}
+
+const roleModal = (roleId, salon, label) => ({
+  type: 9,
+  data: {
+    custom_id: `r_modal:${roleId}:${salon}`,
+    title: `Demande : ${label}`.slice(0, 45),
+    components: [{ type: 1, components: [{ type: 4, custom_id: "raison", label: "Pourquoi souhaitez-vous ce rôle ?", style: 2, min_length: 3, max_length: 500, required: true, placeholder: "ex. Je suis vendeur chez Paletto Auto depuis le 12/11" }] }],
+  },
+});
+
+async function sendRoleRequest(env, interaction, roleId, salon) {
+  const user = interaction.member?.user || {};
+  if ((interaction.member?.roles || []).includes(roleId)) return editReply(env, interaction, "Vous avez déjà ce rôle.");
+  const raison = (interaction.data.components || []).flatMap((r) => r.components || []).find((c) => c.custom_id === "raison")?.value;
+  try {
+    await discordApi(env, "POST", `/channels/${salon}/messages`, {
+      embeds: [{
+        title: "🎭 Nouvelle demande de rôle",
+        color: GOLD,
+        fields: [
+          { name: "Membre", value: `<@${user.id}> (${safe(user.global_name || user.username, 80)})`, inline: true },
+          { name: "Rôle demandé", value: `<@&${roleId}>`, inline: true },
+          { name: "Raison", value: safe(raison, 500) || "—" },
+        ],
+        timestamp: new Date().toISOString(),
+      }],
+      components: [{ type: 1, components: [
+        { type: 2, style: 3, label: "Accepter", emoji: { name: "✅" }, custom_id: `r_ok:${user.id}:${roleId}` },
+        { type: 2, style: 4, label: "Refuser", emoji: { name: "✖️" }, custom_id: `r_no:${user.id}:${roleId}` },
+      ] }],
+      allowed_mentions: { parse: [] },
+    });
+    return editReply(env, interaction, "✅ Demande envoyée à l'équipe. Vous recevrez la réponse en message privé.");
+  } catch (e) {
+    return editReply(env, interaction, `❌ Impossible d'envoyer la demande : ${explain(e)}`);
+  }
+}
+
+async function decideRole(env, interaction, userId, roleId, accept) {
+  const staff = interaction.member?.nick || interaction.member?.user?.global_name || interaction.member?.user?.username || "l'équipe";
+  const followUp = (content) => fetch(`https://discord.com/api/v10/webhooks/${env.DISCORD_APPLICATION_ID}/${interaction.token}`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ content, flags: 64 }),
+  });
+  if (accept) {
+    try {
+      await discordApi(env, "PUT", `/guilds/${interaction.guild_id}/members/${userId}/roles/${roleId}`);
+    } catch (e) {
+      const why = e.status === 403 ? "le rôle du bot doit être placé AU-DESSUS de ce rôle (Paramètres du serveur → Rôles), et le bot doit avoir « Gérer les rôles »." : e.status === 404 ? "ce membre n'est plus sur le serveur." : `erreur Discord (${e.message}).`;
+      return followUp(`❌ Rôle non attribué : ${why}`);
+    }
+  }
+  const old = interaction.message?.embeds?.[0] || {};
+  await fetch(`https://discord.com/api/v10/webhooks/${env.DISCORD_APPLICATION_ID}/${interaction.token}/messages/@original`, {
+    method: "PATCH", headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      embeds: [{ ...old, title: accept ? "✅ Demande de rôle acceptée" : "✖️ Demande de rôle refusée", color: accept ? 0x3ba55c : 0xa83c3c,
+        fields: [...(old.fields || []), { name: "Décision", value: `${accept ? "Acceptée" : "Refusée"} par ${safe(staff, 80)}` }] }],
+      components: [], allowed_mentions: { parse: [] },
+    }),
+  });
+  try { // message privé au membre (ignoré s'il a fermé ses MP)
+    const dm = await discordApi(env, "POST", "/users/@me/channels", { recipient_id: userId });
+    await discordApi(env, "POST", `/channels/${dm.id}/messages`, {
+      content: accept ? `✅ Votre demande de rôle a été **acceptée** par ${safe(staff, 80)}. Le rôle vous a été attribué.` : `✖️ Votre demande de rôle a été **refusée** par ${safe(staff, 80)}. N'hésitez pas à contacter l'équipe pour en savoir plus.`,
+    });
+  } catch { /* MP fermés */ }
+}
+
 function canClose(interaction, opener, role) {
   const m = interaction.member || {};
   const perms = BigInt(m.permissions || "0");
@@ -205,7 +305,7 @@ async function setup(env) {
     return page("Échec de l'enregistrement", `La commande n'a pas pu être enregistrée : ${detail}`, false);
   }
   const invite = `https://discord.com/oauth2/authorize?client_id=${env.DISCORD_APPLICATION_ID}&scope=bot+applications.commands&permissions=${BOT_PERMISSIONS}`;
-  return page("Commandes /avis et /ticket-panel enregistrées ✓", `Les commandes sont prêtes. Pour les tickets, le bot doit pouvoir créer des salons : (ré)invitez-le avec ce lien, qui lui donne les bonnes permissions :<br><a style="color:#e6c77c;word-break:break-all" href="${invite}">${invite}</a><br><br>Ensuite, dans le salon de support, tapez <b>/ticket-panel</b> et choisissez le rôle de votre équipe.`, true);
+  return page("Commandes /avis, /ticket-panel et /role-panel enregistrées ✓", `Les commandes sont prêtes. Pour les tickets, le bot doit pouvoir créer des salons : (ré)invitez-le avec ce lien, qui lui donne les bonnes permissions :<br><a style="color:#e6c77c;word-break:break-all" href="${invite}">${invite}</a><br><br>Ensuite : <b>/ticket-panel</b> dans le salon de support, <b>/role-panel</b> dans le salon des demandes de rôle. Pensez à placer le rôle du bot au-dessus des rôles qu'il doit donner (Paramètres du serveur → Rôles).`, true);
 }
 
 export async function handleDiscord(request, env, path, ctx) {
@@ -240,6 +340,32 @@ export async function handleDiscord(request, env, path, ctx) {
   if (interaction.type === 5 && kind === "t_modal") {
     ctx.waitUntil(openTicket(env, interaction, a, b));
     return json({ type: 5, data: { flags: 64 } });
+  }
+  if (interaction.type === 2 && interaction.data?.name === "role-panel") {
+    if (!env.DISCORD_BOT_TOKEN) return ephemeral("Le token du bot n'est pas configuré.");
+    const panel = rolePanel(interaction);
+    if (!panel) return ephemeral("Choisissez au moins un rôle valide (pas @everyone) et un salon.");
+    ctx.waitUntil(discordApi(env, "POST", `/channels/${interaction.channel_id}/messages`, panel)
+      .then(() => editReply(env, interaction, "✅ Panneau de demande de rôles publié dans ce salon."))
+      .catch((e) => editReply(env, interaction, `❌ Impossible de publier le panneau : ${explain(e)}`)));
+    return json({ type: 5, data: { flags: 64 } });
+  }
+  if (interaction.type === 3 && kind === "r_pick") {
+    const roleId = String(interaction.data.values?.[0] || "");
+    if (!SNOW.test(roleId)) return ephemeral("Rôle invalide.");
+    if ((interaction.member?.roles || []).includes(roleId)) return ephemeral("Vous avez déjà ce rôle.");
+    const label = (interaction.message?.components || []).flatMap((r) => r.components || []).flatMap((c) => c.options || []).find((o) => o.value === roleId)?.label || "rôle";
+    return json(roleModal(roleId, a, label));
+  }
+  if (interaction.type === 5 && kind === "r_modal") {
+    ctx.waitUntil(sendRoleRequest(env, interaction, a, b));
+    return json({ type: 5, data: { flags: 64 } });
+  }
+  if (interaction.type === 3 && (kind === "r_ok" || kind === "r_no")) {
+    const perms = BigInt(interaction.member?.permissions || "0");
+    if ((perms & (P.MANAGE_ROLES | P.ADMIN)) === 0n) return ephemeral("Il faut la permission « Gérer les rôles » pour traiter les demandes.");
+    ctx.waitUntil(decideRole(env, interaction, a, b, kind === "r_ok"));
+    return json({ type: 6 });
   }
   if (interaction.type === 3 && kind === "t_close") {
     if (!canClose(interaction, a, b)) return ephemeral("Seul l'auteur du ticket ou l'équipe peut le fermer.");
