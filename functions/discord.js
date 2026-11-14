@@ -1,5 +1,6 @@
 /**
- * Bot Discord de Paletto Auto : avis clients (/avis), tickets (/ticket-panel) et demandes de rôle (/role-panel).
+ * Bot Discord de Paletto Auto : avis clients (/avis), tickets (/ticket-panel), demandes de rôle (/role-panel)
+ * et absences (/absence-panel).
  *
  * - POST /api/discord        → reçoit les commandes et les clics envoyés par Discord (Interactions Endpoint URL)
  * - GET  /api/discord/setup  → enregistre (ou met à jour) les commandes auprès de Discord
@@ -53,7 +54,17 @@ export const ROLE_COMMAND = {
     ...[2, 3, 4, 5].map((n) => ({ type: 8, name: `role${n}`, description: "Autre rôle pouvant être demandé", required: false })),
   ],
 };
-export const COMMANDS = [AVIS_COMMAND, TICKET_COMMAND, ROLE_COMMAND];
+export const ABSENCE_COMMAND = {
+  name: "absence-panel",
+  description: "Publier le panneau de déclaration d'absence dans ce salon",
+  dm_permission: false,
+  default_member_permissions: "32", // Gérer le serveur
+  options: [
+    { type: 7, name: "salon", description: "Salon (réservé à la direction) où arrivent les absences", required: true, channel_types: [0] },
+    { type: 8, name: "validateur", description: "Seul ce rôle (et les administrateurs) peut valider ou refuser", required: true },
+  ],
+};
+export const COMMANDS = [AVIS_COMMAND, TICKET_COMMAND, ROLE_COMMAND, ABSENCE_COMMAND];
 
 // Permissions Discord (bits)
 const P = { MANAGE_ROLES: 1n << 28n, ADMIN: 1n << 3n, MANAGE_CHANNELS: 1n << 4n, VIEW: 1n << 10n, SEND: 1n << 11n, EMBED: 1n << 14n, ATTACH: 1n << 15n, HISTORY: 1n << 16n };
@@ -239,6 +250,90 @@ async function decideRole(env, interaction, userId, roleId, accept) {
   } catch { /* MP fermés */ }
 }
 
+// ----- Absences -----
+function absencePanel(interaction) {
+  const opts = Object.fromEntries((interaction.data.options || []).map((o) => [o.name, o.value]));
+  const salon = String(opts.salon || ""), valid = String(opts.validateur || "");
+  if (!SNOW.test(salon) || !SNOW.test(valid) || valid === interaction.guild_id) return null;
+  return {
+    embeds: [{
+      title: "📅 Déclarer une absence",
+      color: GOLD,
+      description: "Vous serez absent ? Prévenez la direction en cliquant sur **Déclarer une absence**.\nIndiquez les dates et le motif : vous recevrez la réponse en message privé.",
+      footer: { text: "Paletto Auto • Merci de prévenir le plus tôt possible" },
+    }],
+    components: [{ type: 1, components: [{ type: 2, style: 1, label: "Déclarer une absence", emoji: { name: "📅" }, custom_id: `a_open:${salon}:${valid}` }] }],
+  };
+}
+
+const absenceModal = (salon, valid) => ({
+  type: 9,
+  data: {
+    custom_id: `a_modal:${salon}:${valid}`,
+    title: "Déclarer une absence",
+    components: [
+      { type: 1, components: [{ type: 4, custom_id: "debut", label: "Du (date de début)", style: 1, min_length: 2, max_length: 30, required: true, placeholder: "ex. 20/11" }] },
+      { type: 1, components: [{ type: 4, custom_id: "fin", label: "Au (date de retour)", style: 1, min_length: 2, max_length: 30, required: true, placeholder: "ex. 27/11" }] },
+      { type: 1, components: [{ type: 4, custom_id: "motif", label: "Motif", style: 2, min_length: 3, max_length: 500, required: true, placeholder: "ex. Vacances, examens, raisons personnelles…" }] },
+    ],
+  },
+});
+
+async function sendAbsence(env, interaction, salon, valid) {
+  const user = interaction.member?.user || {};
+  const f = Object.fromEntries((interaction.data.components || []).flatMap((r) => r.components || []).map((c) => [c.custom_id, c.value]));
+  try {
+    await discordApi(env, "POST", `/channels/${salon}/messages`, {
+      embeds: [{
+        title: "📅 Nouvelle absence déclarée",
+        color: GOLD,
+        fields: [
+          { name: "Employé", value: `<@${user.id}> (${safe(interaction.member?.nick || user.global_name || user.username, 80)})` },
+          { name: "Du", value: safe(f.debut, 30) || "—", inline: true },
+          { name: "Au", value: safe(f.fin, 30) || "—", inline: true },
+          { name: "Motif", value: safe(f.motif, 500) || "—" },
+          { name: "Peut valider", value: `<@&${valid}> et les administrateurs` },
+        ],
+        timestamp: new Date().toISOString(),
+      }],
+      components: [{ type: 1, components: [
+        { type: 2, style: 3, label: "Valider", emoji: { name: "✅" }, custom_id: `a_ok:${user.id}:0:${valid}` },
+        { type: 2, style: 4, label: "Refuser", emoji: { name: "✖️" }, custom_id: `a_no:${user.id}:0:${valid}` },
+      ] }],
+      allowed_mentions: { parse: [] },
+    });
+    return editReply(env, interaction, "✅ Absence envoyée à la direction. Vous recevrez la réponse en message privé.");
+  } catch (e) {
+    return editReply(env, interaction, `❌ Impossible d'envoyer l'absence : ${explain(e)}`);
+  }
+}
+
+async function decideAbsence(env, interaction, userId, accept) {
+  const staff = interaction.member?.nick || interaction.member?.user?.global_name || interaction.member?.user?.username || "la direction";
+  const old = interaction.message?.embeds?.[0] || {};
+  const dates = (old.fields || []).filter((x) => x.name === "Du" || x.name === "Au").map((x) => x.value);
+  await fetch(`https://discord.com/api/v10/webhooks/${env.DISCORD_APPLICATION_ID}/${interaction.token}/messages/@original`, {
+    method: "PATCH", headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      embeds: [{ ...old, title: accept ? "✅ Absence validée" : "✖️ Absence refusée", color: accept ? 0x3ba55c : 0xa83c3c,
+        fields: [...(old.fields || []).filter((x) => x.name !== "Peut valider"), { name: "Décision", value: `${accept ? "Validée" : "Refusée"} par ${safe(staff, 80)}` }] }],
+      components: [], allowed_mentions: { parse: [] },
+    }),
+  });
+  try {
+    const dm = await discordApi(env, "POST", "/users/@me/channels", { recipient_id: userId });
+    const periode = dates.length === 2 ? ` (du ${dates[0]} au ${dates[1]})` : "";
+    await discordApi(env, "POST", `/channels/${dm.id}/messages`, {
+      content: accept ? `✅ Votre absence${periode} a été **validée** par ${safe(staff, 80)}. Bon repos !` : `✖️ Votre absence${periode} a été **refusée** par ${safe(staff, 80)}. Contactez la direction pour en parler.`,
+    });
+  } catch { /* MP fermés */ }
+}
+
+function isValidatorOf(interaction, valid) {
+  const perms = BigInt(interaction.member?.permissions || "0");
+  return (perms & P.ADMIN) !== 0n || (valid !== "0" && (interaction.member?.roles || []).includes(valid));
+}
+
 function canClose(interaction, opener, role) {
   const m = interaction.member || {};
   const perms = BigInt(m.permissions || "0");
@@ -308,7 +403,7 @@ async function setup(env) {
     return page("Échec de l'enregistrement", `La commande n'a pas pu être enregistrée : ${detail}`, false);
   }
   const invite = `https://discord.com/oauth2/authorize?client_id=${env.DISCORD_APPLICATION_ID}&scope=bot+applications.commands&permissions=${BOT_PERMISSIONS}`;
-  return page("Commandes /avis, /ticket-panel et /role-panel enregistrées ✓", `Les commandes sont prêtes. Pour les tickets, le bot doit pouvoir créer des salons : (ré)invitez-le avec ce lien, qui lui donne les bonnes permissions :<br><a style="color:#e6c77c;word-break:break-all" href="${invite}">${invite}</a><br><br>Ensuite : <b>/ticket-panel</b> dans le salon de support, <b>/role-panel</b> dans le salon des demandes de rôle. Pensez à placer le rôle du bot au-dessus des rôles qu'il doit donner (Paramètres du serveur → Rôles).`, true);
+  return page("Commandes /avis, /ticket-panel, /role-panel et /absence-panel enregistrées ✓", `Les commandes sont prêtes. Pour les tickets, le bot doit pouvoir créer des salons : (ré)invitez-le avec ce lien, qui lui donne les bonnes permissions :<br><a style="color:#e6c77c;word-break:break-all" href="${invite}">${invite}</a><br><br>Ensuite : <b>/ticket-panel</b> dans le salon de support, <b>/role-panel</b> dans le salon des demandes de rôle, <b>/absence-panel</b> dans le salon des employés. Pensez à placer le rôle du bot au-dessus des rôles qu'il doit donner (Paramètres du serveur → Rôles).`, true);
 }
 
 export async function handleDiscord(request, env, path, ctx) {
@@ -370,6 +465,25 @@ export async function handleDiscord(request, env, path, ctx) {
     const isValidator = c !== "0" && (interaction.member?.roles || []).includes(c);
     if (!isAdmin && !isValidator) return ephemeral(c !== "0" ? `Seuls les membres <@&${c}> et les administrateurs peuvent accepter ou refuser cette demande.` : "Seuls les administrateurs peuvent traiter cette demande.");
     ctx.waitUntil(decideRole(env, interaction, a, b, kind === "r_ok"));
+    return json({ type: 6 });
+  }
+  if (interaction.type === 2 && interaction.data?.name === "absence-panel") {
+    if (!env.DISCORD_BOT_TOKEN) return ephemeral("Le token du bot n'est pas configuré.");
+    const panel = absencePanel(interaction);
+    if (!panel) return ephemeral("Choisissez un salon et un rôle validateur (pas @everyone).");
+    ctx.waitUntil(discordApi(env, "POST", `/channels/${interaction.channel_id}/messages`, panel)
+      .then(() => editReply(env, interaction, "✅ Panneau des absences publié dans ce salon."))
+      .catch((e) => editReply(env, interaction, `❌ Impossible de publier le panneau : ${explain(e)}`)));
+    return json({ type: 5, data: { flags: 64 } });
+  }
+  if (interaction.type === 3 && kind === "a_open") return json(absenceModal(a, b));
+  if (interaction.type === 5 && kind === "a_modal") {
+    ctx.waitUntil(sendAbsence(env, interaction, a, b));
+    return json({ type: 5, data: { flags: 64 } });
+  }
+  if (interaction.type === 3 && (kind === "a_ok" || kind === "a_no")) {
+    if (!isValidatorOf(interaction, c)) return ephemeral(`Seuls les membres <@&${c}> et les administrateurs peuvent valider ou refuser une absence.`);
+    ctx.waitUntil(decideAbsence(env, interaction, a, kind === "a_ok"));
     return json({ type: 6 });
   }
   if (interaction.type === 3 && kind === "t_close") {

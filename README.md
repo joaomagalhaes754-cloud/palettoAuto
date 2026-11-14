@@ -32,7 +32,7 @@ Hébergé gratuitement sur **Cloudflare Workers** avec une base **D1**. Les tabl
 | « Something went wrong… can't process that file » (GitHub) | Le zip n'a pas été extrait avant l'envoi |
 | 404 sur `/api/...` | Les fichiers ne sont pas à la racine du dépôt |
 
-## Bot Discord : avis (/avis), tickets (/ticket-panel) et demandes de rôle (/role-panel)
+## Bot Discord : avis (/avis), tickets (/ticket-panel), demandes de rôle (/role-panel) et absences (/absence-panel)
 Le bot tourne dans ce même Worker (adresse `/api/discord`). Mise en place :
 1. https://discord.com/developers/applications → *New Application* → copier **Application ID** et **Public Key** ; onglet *Bot* → *Reset Token* → copier le **token**.
 2. Cloudflare → Worker → *Settings* → *Variables and Secrets* → ajouter 3 **Secrets** : `DISCORD_APPLICATION_ID`, `DISCORD_PUBLIC_KEY`, `DISCORD_BOT_TOKEN`.
@@ -50,3 +50,7 @@ Le bot tourne dans ce même Worker (adresse `/api/discord`). Mise en place :
 - `/role-panel` (réservé à « Gérer les rôles ») : choisir le **salon de l'équipe** où arrivent les demandes, le **rôle validateur** (seul ce rôle et les administrateurs peuvent accepter/refuser) et jusqu'à 5 rôles demandables.
 - Le membre choisit un rôle dans la liste et explique pourquoi ; l'équipe reçoit la demande avec **Accepter** / **Refuser**. Le membre reçoit la réponse en MP.
 - Le rôle du bot doit être **au-dessus** des rôles qu'il donne (Paramètres du serveur → Rôles).
+
+### Absences
+- `/absence-panel` (réservé à « Gérer le serveur ») dans le salon des employés : choisir le **salon de la direction** et le **rôle validateur**.
+- L'employé clique « Déclarer une absence » (dates + motif) ; la direction reçoit la déclaration avec **Valider** / **Refuser** ; l'employé reçoit la réponse en MP.
