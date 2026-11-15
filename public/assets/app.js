@@ -75,7 +75,7 @@ TYPES.depenses = {
   desc: "Enregistrez les dépenses de l'entreprise (achats de véhicules, salaires, frais…). Elles sont déduites du CA pour calculer le bénéfice de la semaine.",
   fields: [
     { key: "libelle", label: "Libellé", type: "text", required: true, placeholder: "ex. Commande de 3 véhicules, salaires semaine 12", full: true },
-    { key: "categorie", label: "Catégorie", type: "select", options: ["Achat de véhicules", "Salaires", "Frais de fonctionnement", "Autre"] },
+    { key: "categorie", label: "Catégorie", type: "select", options: ["Rachat de véhicules d'occasion", "Salaires", "Frais de fonctionnement", "Autre"] },
     { key: "montant", label: "Montant ($)", type: "money", required: true },
     { key: "notes", label: "Notes", type: "long", placeholder: "Détails…" },
   ],
@@ -544,6 +544,10 @@ function renderCA() {
   const hasProfit = ca.depenses !== undefined;
   $("#caProfit").classList.toggle("hidden", !hasProfit);
   if (hasProfit) {
+    $("#caAchats").textContent = money(ca.achats || 0);
+    $("#caAchatsSub").textContent = `${ca.coutUsinePct ?? 50} % du prix de vente des véhicules neufs vendus`;
+    $("#caMarge").textContent = money(ca.marge ?? ca.total);
+    $("#caMarge").classList.toggle("negative", (ca.marge ?? 0) < 0);
     $("#caDepenses").textContent = money(ca.depenses);
     $("#caDepensesCount").textContent = `${ca.depensesCount} dépense${ca.depensesCount > 1 ? "s" : ""} enregistrée${ca.depensesCount > 1 ? "s" : ""}`;
     $("#caBenefice").textContent = money(ca.benefice);
@@ -552,7 +556,7 @@ function renderCA() {
     $("#caSolde").textContent = acc ? money(acc.solde) : "Non défini";
     $("#caSolde").classList.toggle("negative", !!acc && acc.solde < 0);
     $("#caSoldeSub").textContent = acc
-      ? `Départ ${money(acc.base)} le ${dateTime(acc.at)} • +${money(acc.entrees)} entrées • −${money(acc.sorties)} dépenses`
+      ? `Départ ${money(acc.base)} le ${dateTime(acc.at)} • +${money(acc.entrees)} ventes • −${money(acc.sorties)} achats usine et dépenses`
       : "Indiquez le montant actuel du compte pour partir sur la bonne base.";
     $("#soldeBtn").textContent = acc ? "Recaler le solde" : "Définir le solde";
     $("#soldeBtn").classList.toggle("hidden", !can("ca.cloturer"));
@@ -570,7 +574,7 @@ function renderCA() {
     <details class="archive">
       <summary><span><b>Du ${dateLabel(a.period_start)} au ${dateLabel(a.period_end)}</b><small>Clôturée par ${esc(userName(a.reset_by))} • ${a.details.count} opération(s)</small></span><strong>${money(a.total)}</strong></summary>
       <div class="archive-body">
-        <p class="muted small">Ventes : ${money(a.details.ventes)}${a.details.depenses !== undefined ? ` • Dépenses : ${money(a.details.depenses)} • <b>Bénéfice : ${money(a.details.benefice)}</b>` : ""}</p>
+        <p class="muted small">Ventes : ${money(a.details.ventes)}${a.details.achats !== undefined ? ` • Achats usine : ${money(a.details.achats)}` : ""}${a.details.depenses !== undefined ? ` • Dépenses : ${money(a.details.depenses)} • <b>Bénéfice : ${money(a.details.benefice)}</b>` : ""}</p>
         ${a.details.paie ? `<p class="muted small">${a.details.paie.best?.length ? `🏆 Meilleur vendeur : <b>${esc(a.details.paie.best.map(userName).join(" & "))}</b> (prime ${money(a.details.paie.prime)}) • ` : ""}Salaires et primes : <b>${money(a.details.paie.totalAVerser)}</b></p>` : ""}
         ${(a.details.employees || []).map((e) => { const p = a.details.paie?.rows?.find((x) => x.agent === e.agent); return `<div class="archive-row"><span>${esc(userName(e.agent))}${p?.prime ? " 🏆" : ""}</span><span>${e.count} op.</span><b>${money(e.total)}</b>${p ? `<span class="arch-pay">payé ${money(p.aVerser)}</span>` : ""}</div>`; }).join("") || `<p class="muted small">Aucune opération sur cette période.</p>`}
         ${can("ca.cloturer") ? `<button class="mini-btn danger" data-archive-delete="${a.id}">Supprimer cet historique</button>` : ""}
@@ -883,7 +887,8 @@ function onVehicleInput(input) {
     const base = form.querySelector("[name=prix_base]");
     if (base) { base.value = c.prix_vente; base.dispatchEvent(new Event("input", { bubbles: true })); }
     recalcSale(form);
-    if (hint) hint.textContent = `Prix ${c.categorie === "Occasion" ? "de l'occasion" : "catalogue"} : ${money(c.prix_vente)} (modifiable).`;
+    const pct = state.ca?.coutUsinePct ?? 50;
+    if (hint) hint.textContent = c.categorie === "Occasion" ? `Prix de l'occasion : ${money(c.prix_vente)} (modifiable).` : `Prix catalogue : ${money(c.prix_vente)} • acheté à l'usine ${money(Math.round(c.prix_vente * pct / 100))} (${pct} %).`;
   } else if (hint && input.value.trim()) hint.textContent = "Modèle hors liste : indiquez le prix à la main.";
   showVehiclePreview(input);
 }
@@ -977,6 +982,7 @@ function openObjectives() {
   f.employe.value = state.ca?.objectifs?.employe || "";
   f.salaire_max.value = state.ca?.paie?.max ?? 250000;
   f.prime_meilleur.value = state.ca?.paie?.prime ?? 50000;
+  f.cout_usine_pct.value = state.ca?.coutUsinePct ?? 50;
   $("#objectivesError").textContent = "";
   openModal("objectivesModal");
   setTimeout(() => f.entreprise.focus(), 40);
@@ -988,7 +994,7 @@ async function saveObjectives(e) {
   const btn = f.querySelector("button[type=submit]");
   setBusy(btn, true, "Enregistrement…");
   try {
-    await api("ca/objectifs", { method: "POST", body: { entreprise: Number(f.entreprise.value) || 0, employe: Number(f.employe.value) || 0, salaire_max: Number(f.salaire_max.value) || 0, prime_meilleur: Number(f.prime_meilleur.value) || 0 } });
+    await api("ca/objectifs", { method: "POST", body: { entreprise: Number(f.entreprise.value) || 0, employe: Number(f.employe.value) || 0, salaire_max: Number(f.salaire_max.value) || 0, prime_meilleur: Number(f.prime_meilleur.value) || 0, cout_usine_pct: f.cout_usine_pct.value === "" ? 50 : Number(f.cout_usine_pct.value) } });
     closeModal("objectivesModal");
     toast("Objectifs enregistrés.");
     await loadAll();

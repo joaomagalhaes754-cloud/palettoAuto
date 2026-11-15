@@ -26,6 +26,7 @@ const PBKDF2_ITERATIONS = 100000; // maximum autorisé par Cloudflare Workers
 const SCHEMA = {
   ventes: {
     fields: { vehicule: "text", client: "text", agent: "user", prix_base: "money", partenariat: "text", remise: "percent", prix: "money" },
+    factoryCost: true, // coût d'achat usine calculé à l'enregistrement
     required: ["vehicule", "prix"],
     amount: "prix",
     counted: true, // une vente est enregistrée uniquement quand elle est conclue
@@ -40,7 +41,7 @@ const SCHEMA = {
     required: ["organisation"],
   },
   depenses: {
-    fields: { libelle: "text", categorie: ["Achat de véhicules", "Salaires", "Frais de fonctionnement", "Autre"], montant: "money", notes: "long" },
+    fields: { libelle: "text", categorie: ["Rachat de véhicules d'occasion", "Salaires", "Frais de fonctionnement", "Autre"], montant: "money", notes: "long" },
     required: ["libelle", "montant"],
     amount: "montant",
     counted: true,
@@ -434,6 +435,18 @@ function canEditRecord(me, rec) {
   return can(me, "dossiers.modifier_siens") && (rec.created_by === me.username || rec.agent === me.username);
 }
 
+// Prix d'achat à l'usine d'un véhicule neuf vendu : un % (50 par défaut) du prix de vente catalogue (prix de base,
+// ou prix final s'il n'y en a pas). Une occasion de la liste n'a pas de coût usine : son rachat est une dépense.
+const getFactoryPct = async (db) => {
+  const v = (await db.prepare("SELECT value FROM d8_settings WHERE key = 'cout_usine_pct'").first())?.value;
+  return v === undefined || v === null || v === "" ? 50 : Number(v);
+};
+async function factoryCost(db, data) {
+  const occ = await db.prepare("SELECT 1 AS x FROM d8_catalog WHERE categorie = 'Occasion' AND LOWER(TRIM(nom)) = LOWER(TRIM(?))").bind(String(data.vehicule || "")).first();
+  if (occ) return 0;
+  return Math.round((data.prix_base || data.prix || 0) * (await getFactoryPct(db)) / 100);
+}
+
 async function cleanRecord(db, me, spec, body, existing) {
   const data = {};
   let agent = null;
@@ -460,6 +473,7 @@ async function cleanRecord(db, me, spec, body, existing) {
     } else data[key] = cleanText(raw, kind === "long" ? 2000 : 200);
   }
   for (const k of spec.required) if (!data[k]) fail(400, `Le champ « ${FIELD_LABELS[k] || k} » est obligatoire.`);
+  if (spec.factoryCost) data.cout_usine = await factoryCost(db, data);
   const amount = spec.amount ? data[spec.amount] : 0;
   const counted = spec.counted === true || !!(Array.isArray(spec.counted) && spec.counted.includes(data.statut));
   return { data, agent, amount, counted };
@@ -563,9 +577,11 @@ async function caBreakdown(db, since) {
      GROUP BY agent ORDER BY total DESC`
   ).bind(since).all();
   const dep = await db.prepare("SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS n FROM d8_records WHERE type = 'depenses' AND closed_at IS NOT NULL AND closed_at >= ?").bind(since).first();
+  const usine = await db.prepare("SELECT COALESCE(SUM(json_extract(data, '$.cout_usine')), 0) AS total FROM d8_records WHERE type = 'ventes' AND closed_at IS NOT NULL AND closed_at >= ?").bind(since).first();
   const sum = (k) => results.reduce((s, r) => s + (r[k] || 0), 0);
   const total = sum("total");
-  return { employees: results, total, ventes: sum("ventes"), locations: sum("locations"), count: sum("count"), depenses: dep.total, depensesCount: dep.n, benefice: total - dep.total };
+  const achats = Number(usine.total) || 0;
+  return { employees: results, total, ventes: sum("ventes"), locations: sum("locations"), count: sum("count"), achats, marge: total - achats, depenses: dep.total, depensesCount: dep.n, benefice: total - achats - dep.total };
 }
 
 // Salaires : salaire max × (CA de l'employé ÷ objectif par employé), plafonné au max ; prime au(x) meilleur(s) vendeur(s).
@@ -598,14 +614,14 @@ async function ca(db, me, method, sub, id, body = {}) {
     const mine = b.employees.find((e) => e.agent === me.username) || { agent: me.username, count: 0, total: 0, ventes: 0, locations: 0 };
     const obj = async (k) => Number((await db.prepare("SELECT value FROM d8_settings WHERE key = ?").bind(k).first())?.value || 0);
     const out = { since, total: b.total, ventes: b.ventes, locations: b.locations, count: b.count, mine,
-      objectifs: { entreprise: await obj("objectif_entreprise"), employe: await obj("objectif_employe") } };
+      objectifs: { entreprise: await obj("objectif_entreprise"), employe: await obj("objectif_employe") }, coutUsinePct: await getFactoryPct(db) };
     const pay = await payroll(db, b);
     out.paie = { max: pay.max, prime: pay.prime, objectif: pay.objectif, best: pay.best,
       mine: pay.rows.find((r) => r.agent === me.username) || null,
       classement: pay.rows.map((r) => (isManager || r.agent === me.username ? r : { agent: r.agent, rank: r.rank, count: r.count, best: r.best })) };
     if (isManager) Object.assign(out.paie, { totalSalaires: pay.totalSalaires, totalPrimes: pay.totalPrimes, totalAVerser: pay.totalAVerser });
     if (isManager || can(me, "depenses.gerer")) {
-      Object.assign(out, { depenses: b.depenses, depensesCount: b.depensesCount, benefice: b.benefice });
+      Object.assign(out, { achats: b.achats, marge: b.marge, depenses: b.depenses, depensesCount: b.depensesCount, benefice: b.benefice });
       out.compte = await accountBalance(db);
     }
     if (isManager) {
@@ -634,9 +650,14 @@ async function ca(db, me, method, sub, id, body = {}) {
     const pairs = [["objectif_entreprise", ent], ["objectif_employe", emp]];
     if (body.salaire_max !== undefined) pairs.push(["salaire_max", cleanMoney(body.salaire_max)]);
     if (body.prime_meilleur !== undefined) pairs.push(["prime_meilleur", cleanMoney(body.prime_meilleur)]);
+    if (body.cout_usine_pct !== undefined) {
+      const pct = Number(body.cout_usine_pct);
+      if (!Number.isFinite(pct) || pct < 0 || pct > 100) fail(400, "Le prix d'achat usine doit être un pourcentage entre 0 et 100.");
+      pairs.push(["cout_usine_pct", Math.round(pct * 10) / 10]);
+    }
     await db.batch(pairs.map(([k, v]) =>
       db.prepare("INSERT INTO d8_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(k, String(v))));
-    await logAction(db, me, "modification", "Objectifs", "Objectifs et salaires", [`entreprise ${fmt$(ent)}`, `par employé ${fmt$(emp)}`, body.salaire_max !== undefined && `salaire max ${fmt$(cleanMoney(body.salaire_max))}`, body.prime_meilleur !== undefined && `prime ${fmt$(cleanMoney(body.prime_meilleur))}`].filter(Boolean).join(" • "));
+    await logAction(db, me, "modification", "Objectifs", "Objectifs et salaires", [`entreprise ${fmt$(ent)}`, `par employé ${fmt$(emp)}`, body.salaire_max !== undefined && `salaire max ${fmt$(cleanMoney(body.salaire_max))}`, body.prime_meilleur !== undefined && `prime ${fmt$(cleanMoney(body.prime_meilleur))}`, body.cout_usine_pct !== undefined && `achat usine ${Number(body.cout_usine_pct)} % du prix`].filter(Boolean).join(" • "));
     return json({ ok: true });
   }
 
@@ -646,7 +667,7 @@ async function ca(db, me, method, sub, id, body = {}) {
     let start = since;
     if (!start) start = (await db.prepare("SELECT MIN(closed_at) AS m FROM d8_records WHERE closed_at IS NOT NULL").first())?.m || now;
     const pay = await payroll(db, b);
-    const details = { ventes: b.ventes, locations: b.locations, count: b.count, employees: b.employees, depenses: b.depenses, benefice: b.benefice,
+    const details = { ventes: b.ventes, locations: b.locations, count: b.count, employees: b.employees, achats: b.achats, depenses: b.depenses, benefice: b.benefice,
       paie: { max: pay.max, prime: pay.prime, objectif: pay.objectif, best: pay.best, totalAVerser: pay.totalAVerser,
         rows: pay.rows.filter((r) => r.aVerser > 0 || r.total > 0).map((r) => ({ agent: r.agent, total: r.total, salaire: r.salaire, prime: r.prime, aVerser: r.aVerser })) } };
     await db.batch([
@@ -667,7 +688,7 @@ async function ca(db, me, method, sub, id, body = {}) {
   fail(404, "Route introuvable.");
 }
 
-// Solde du compte = montant de départ + ventes/locations − dépenses enregistrées depuis
+// Solde du compte = montant de départ + ventes − achats usine − dépenses enregistrées depuis
 async function accountBalance(db) {
   const get = async (k) => (await db.prepare("SELECT value FROM d8_settings WHERE key = ?").bind(k).first())?.value;
   const at = Number(await get("solde_at") || 0);
@@ -675,7 +696,7 @@ async function accountBalance(db) {
   const base = Number(await get("solde_base") || 0);
   const r = await db.prepare(
     `SELECT COALESCE(SUM(CASE WHEN type IN ('ventes', 'locations') THEN amount ELSE 0 END), 0) AS entrees,
-            COALESCE(SUM(CASE WHEN type = 'depenses' THEN amount ELSE 0 END), 0) AS sorties
+            COALESCE(SUM(CASE WHEN type = 'depenses' THEN amount WHEN type = 'ventes' THEN COALESCE(json_extract(data, '$.cout_usine'), 0) ELSE 0 END), 0) AS sorties
      FROM d8_records WHERE closed_at IS NOT NULL AND closed_at >= ?`
   ).bind(at).first();
   return { base, at, entrees: r.entrees, sorties: r.sorties, solde: base + r.entrees - r.sorties };

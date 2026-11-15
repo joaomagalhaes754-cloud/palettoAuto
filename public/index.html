@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/assets/style.css?v=6">
+  <link rel="stylesheet" href="/assets/style.css?v=7">
 </head>
 <body>
   <!-- ============ VITRINE PUBLIQUE ============ -->
@@ -190,11 +190,13 @@
           </div>
         </div>
         <div class="ca-profit hidden" id="caProfit">
+          <div><span>Achats à l'usine</span><b id="caAchats">—</b><small id="caAchatsSub"></small></div>
+          <div><span>Marge sur les ventes</span><b id="caMarge">—</b><small>CA − achats à l'usine</small></div>
           <div><span>Dépenses de la période</span><b id="caDepenses">—</b><small id="caDepensesCount"></small></div>
-          <div class="benefice"><span>Bénéfice net (CA − dépenses)</span><b id="caBenefice">—</b><small>Ce qui reste réellement à l'entreprise</small></div>
+          <div class="benefice"><span>Bénéfice net (CA − achats − dépenses)</span><b id="caBenefice">—</b><small>Ce qui reste réellement à l'entreprise</small></div>
           <div class="account"><span>Solde du compte</span><b id="caSolde">—</b><small id="caSoldeSub"></small><button class="mini-btn hidden" id="soldeBtn">Définir le solde</button></div>
         </div>
-        <p class="hint">Le CA compte <b>toutes les ventes enregistrées</b> (prix final après remise), attribuées au vendeur responsable.</p>
+        <p class="hint">Le CA compte <b>toutes les ventes enregistrées</b> (prix final après remise), attribuées au vendeur responsable. Chaque véhicule neuf vendu est compté comme acheté à l'usine à <b>50 % de son prix de vente catalogue</b> (réglable dans « Objectifs &amp; salaires ») ; les occasions de la liste n'ont pas de coût usine.</p>
         <section class="panel hidden" id="caChartPanel">
           <div class="panel-heading"><div><p class="section-kicker">ÉVOLUTION</p><h3>CA par semaine</h3></div></div>
           <div id="caChart" class="chart-wrap"></div>
@@ -367,6 +369,7 @@
       <label>Objectif de CA par employé ($)<input name="employe" type="number" min="0" step="1" inputmode="numeric" placeholder="ex. 500000"></label>
       <label>Salaire maximum par semaine ($)<input name="salaire_max" type="number" min="0" step="1" inputmode="numeric" placeholder="250000"></label>
       <label>Prime du meilleur vendeur ($)<input name="prime_meilleur" type="number" min="0" step="1" inputmode="numeric" placeholder="50000"></label>
+      <label>Prix d'achat à l'usine (% du prix de vente)<input name="cout_usine_pct" type="number" min="0" max="100" step="0.5" inputmode="decimal" placeholder="50"></label>
       <p class="modal-meta">Un vendeur qui atteint l'objectif par employé touche le salaire maximum ; en dessous, son salaire est proportionnel à son CA. Le meilleur vendeur de la semaine touche la prime en plus. Ces réglages restent en place d'une semaine à l'autre.</p>
       <p id="objectivesError" class="error" role="alert"></p>
       <div class="modal-actions"><span class="spacer"></span><button type="button" class="btn btn-quiet" data-close="objectivesModal">Annuler</button><button class="btn btn-primary" type="submit">Enregistrer</button></div>
@@ -444,6 +447,6 @@
   </div></div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="/assets/app.js?v=6"></script>
+  <script src="/assets/app.js?v=7"></script>
 </body>
 </html>

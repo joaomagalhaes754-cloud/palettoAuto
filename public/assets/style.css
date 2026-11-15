@@ -454,3 +454,4 @@ body[data-bg="abstrait"] .app::after{content:"";position:fixed;inset:0;z-index:-
 /* Boutons dorés : texte sombre pour rester lisible */
 .btn-primary{background:linear-gradient(135deg,#e6c77c 0%,#c9a24a 45%,#9a782b 100%);color:#16110a;box-shadow:0 8px 26px rgba(201,162,74,.28),inset 0 1px 0 rgba(255,255,255,.35)}
 .btn-primary:hover{filter:brightness(1.07)}
+@media(min-width:1051px){.ca-profit .account{grid-column:span 2}}
