@@ -584,6 +584,20 @@ async function caBreakdown(db, since) {
   return { employees: results, total, ventes: sum("ventes"), locations: sum("locations"), count: sum("count"), achats, marge: total - achats, depenses: dep.total, depensesCount: dep.n, benefice: total - achats - dep.total };
 }
 
+// Taxe de l'État : un % calculé sur le CA, le bénéfice (CA − achats usine − dépenses) ou le solde du compte.
+// Estimée pendant la semaine, elle est figée et retirée du solde du compte à la clôture.
+const TAX_BASES = { ca: "le chiffre d'affaires", benefice: "le bénéfice", compte: "le solde du compte" };
+async function taxSettings(db) {
+  const get = async (k) => (await db.prepare("SELECT value FROM d8_settings WHERE key = ?").bind(k).first())?.value;
+  const pct = Number(await get("taxe_pct") || 0);
+  const base = TAX_BASES[await get("taxe_base")] ? await get("taxe_base") : "benefice";
+  return { pct, base };
+}
+function taxFor(cfg, b, compte) {
+  const assiette = cfg.base === "ca" ? b.total : cfg.base === "compte" ? (compte ? compte.solde : 0) : b.benefice;
+  return { pct: cfg.pct, base: cfg.base, assiette, montant: Math.max(0, Math.round(Math.max(0, assiette) * cfg.pct / 100)) };
+}
+
 // Salaires : salaire max × (CA de l'employé ÷ objectif par employé), plafonné au max ; prime au(x) meilleur(s) vendeur(s).
 async function payroll(db, b) {
   const get = async (k, d) => { const v = (await db.prepare("SELECT value FROM d8_settings WHERE key = ?").bind(k).first())?.value; return v === undefined || v === null || v === "" ? d : Number(v); };
@@ -623,6 +637,8 @@ async function ca(db, me, method, sub, id, body = {}) {
     if (isManager || can(me, "depenses.gerer")) {
       Object.assign(out, { achats: b.achats, marge: b.marge, depenses: b.depenses, depensesCount: b.depensesCount, benefice: b.benefice });
       out.compte = await accountBalance(db);
+      out.taxe = taxFor(await taxSettings(db), b, out.compte);
+      out.beneficeNet = b.benefice - out.taxe.montant;
     }
     if (isManager) {
       out.employees = b.employees;
@@ -650,6 +666,15 @@ async function ca(db, me, method, sub, id, body = {}) {
     const pairs = [["objectif_entreprise", ent], ["objectif_employe", emp]];
     if (body.salaire_max !== undefined) pairs.push(["salaire_max", cleanMoney(body.salaire_max)]);
     if (body.prime_meilleur !== undefined) pairs.push(["prime_meilleur", cleanMoney(body.prime_meilleur)]);
+    if (body.taxe_pct !== undefined) {
+      const t = Number(body.taxe_pct);
+      if (!Number.isFinite(t) || t < 0 || t > 100) fail(400, "La taxe de l'État doit être un pourcentage entre 0 et 100.");
+      pairs.push(["taxe_pct", Math.round(t * 100) / 100]);
+    }
+    if (body.taxe_base !== undefined) {
+      if (!TAX_BASES[body.taxe_base]) fail(400, "Base de calcul de la taxe inconnue.");
+      pairs.push(["taxe_base", body.taxe_base]);
+    }
     if (body.cout_usine_pct !== undefined) {
       const pct = Number(body.cout_usine_pct);
       if (!Number.isFinite(pct) || pct < 0 || pct > 100) fail(400, "Le prix d'achat usine doit être un pourcentage entre 0 et 100.");
@@ -657,7 +682,7 @@ async function ca(db, me, method, sub, id, body = {}) {
     }
     await db.batch(pairs.map(([k, v]) =>
       db.prepare("INSERT INTO d8_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(k, String(v))));
-    await logAction(db, me, "modification", "Objectifs", "Objectifs et salaires", [`entreprise ${fmt$(ent)}`, `par employé ${fmt$(emp)}`, body.salaire_max !== undefined && `salaire max ${fmt$(cleanMoney(body.salaire_max))}`, body.prime_meilleur !== undefined && `prime ${fmt$(cleanMoney(body.prime_meilleur))}`, body.cout_usine_pct !== undefined && `achat usine ${Number(body.cout_usine_pct)} % du prix`].filter(Boolean).join(" • "));
+    await logAction(db, me, "modification", "Objectifs", "Objectifs et salaires", [`entreprise ${fmt$(ent)}`, `par employé ${fmt$(emp)}`, body.salaire_max !== undefined && `salaire max ${fmt$(cleanMoney(body.salaire_max))}`, body.prime_meilleur !== undefined && `prime ${fmt$(cleanMoney(body.prime_meilleur))}`, body.cout_usine_pct !== undefined && `achat usine ${Number(body.cout_usine_pct)} % du prix`, body.taxe_pct !== undefined && `taxe de l'État ${Number(body.taxe_pct)} % sur ${TAX_BASES[body.taxe_base] || "le bénéfice"}`].filter(Boolean).join(" • "));
     return json({ ok: true });
   }
 
@@ -667,7 +692,9 @@ async function ca(db, me, method, sub, id, body = {}) {
     let start = since;
     if (!start) start = (await db.prepare("SELECT MIN(closed_at) AS m FROM d8_records WHERE closed_at IS NOT NULL").first())?.m || now;
     const pay = await payroll(db, b);
+    const taxe = taxFor(await taxSettings(db), b, await accountBalance(db));
     const details = { ventes: b.ventes, locations: b.locations, count: b.count, employees: b.employees, achats: b.achats, depenses: b.depenses, benefice: b.benefice,
+      taxe, beneficeNet: b.benefice - taxe.montant,
       paie: { max: pay.max, prime: pay.prime, objectif: pay.objectif, best: pay.best, totalAVerser: pay.totalAVerser,
         rows: pay.rows.filter((r) => r.aVerser > 0 || r.total > 0).map((r) => ({ agent: r.agent, total: r.total, salaire: r.salaire, prime: r.prime, aVerser: r.aVerser })) } };
     await db.batch([
@@ -676,7 +703,7 @@ async function ca(db, me, method, sub, id, body = {}) {
       db.prepare("INSERT INTO d8_settings (key, value) VALUES ('ca_reset_at', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
         .bind(String(now)),
     ]);
-    await logAction(db, me, "clôture", "CA", "Clôture de la semaine", `CA ${fmt$(b.total)} • dépenses ${fmt$(b.depenses)} • bénéfice ${fmt$(b.benefice)}${pay.best.length ? ` • meilleur vendeur : ${pay.best.join(", ")}` : ""} • salaires et primes ${fmt$(pay.totalAVerser)}`);
+    await logAction(db, me, "clôture", "CA", "Clôture de la semaine", `CA ${fmt$(b.total)} • dépenses ${fmt$(b.depenses)} • bénéfice ${fmt$(b.benefice)}${taxe.montant ? ` • taxe de l'État ${fmt$(taxe.montant)} (${taxe.pct} % sur ${TAX_BASES[taxe.base]})` : ""}${pay.best.length ? ` • meilleur vendeur : ${pay.best.join(", ")}` : ""} • salaires et primes ${fmt$(pay.totalAVerser)}`);
     return json({ ok: true, since: now });
   }
   if (method === "DELETE" && sub === "archives" && /^\d+$/.test(String(id))) {
@@ -688,7 +715,7 @@ async function ca(db, me, method, sub, id, body = {}) {
   fail(404, "Route introuvable.");
 }
 
-// Solde du compte = montant de départ + ventes − achats usine − dépenses enregistrées depuis
+// Solde du compte = montant de départ + ventes − achats usine − dépenses − taxes des semaines clôturées depuis
 async function accountBalance(db) {
   const get = async (k) => (await db.prepare("SELECT value FROM d8_settings WHERE key = ?").bind(k).first())?.value;
   const at = Number(await get("solde_at") || 0);
@@ -699,7 +726,9 @@ async function accountBalance(db) {
             COALESCE(SUM(CASE WHEN type = 'depenses' THEN amount WHEN type = 'ventes' THEN COALESCE(json_extract(data, '$.cout_usine'), 0) ELSE 0 END), 0) AS sorties
      FROM d8_records WHERE closed_at IS NOT NULL AND closed_at >= ?`
   ).bind(at).first();
-  return { base, at, entrees: r.entrees, sorties: r.sorties, solde: base + r.entrees - r.sorties };
+  const t = await db.prepare("SELECT COALESCE(SUM(json_extract(details, '$.taxe.montant')), 0) AS total FROM d8_ca_archives WHERE period_end >= ?").bind(at).first();
+  const taxes = Number(t.total) || 0;
+  return { base, at, entrees: r.entrees, sorties: r.sorties + taxes, taxes, solde: base + r.entrees - r.sorties - taxes };
 }
 
 /* ---------- vitrine publique (sans connexion) ---------- */

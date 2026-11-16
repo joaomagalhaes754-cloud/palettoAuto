@@ -550,13 +550,17 @@ function renderCA() {
     $("#caMarge").classList.toggle("negative", (ca.marge ?? 0) < 0);
     $("#caDepenses").textContent = money(ca.depenses);
     $("#caDepensesCount").textContent = `${ca.depensesCount} dépense${ca.depensesCount > 1 ? "s" : ""} enregistrée${ca.depensesCount > 1 ? "s" : ""}`;
-    $("#caBenefice").textContent = money(ca.benefice);
-    $("#caBenefice").classList.toggle("negative", ca.benefice < 0);
+    const tx = ca.taxe || { pct: 0, montant: 0, base: "benefice" };
+    const TAX_BASE_LABEL = { ca: "du chiffre d'affaires", benefice: "du bénéfice", compte: "du solde du compte" };
+    $("#caTaxe").textContent = money(tx.montant);
+    $("#caTaxeSub").textContent = tx.pct ? `${tx.pct} % ${TAX_BASE_LABEL[tx.base]} • payée à la clôture` : "Aucune taxe réglée (« Objectifs & salaires »)";
+    $("#caBenefice").textContent = money(ca.beneficeNet ?? ca.benefice);
+    $("#caBenefice").classList.toggle("negative", (ca.beneficeNet ?? ca.benefice) < 0);
     const acc = ca.compte;
     $("#caSolde").textContent = acc ? money(acc.solde) : "Non défini";
     $("#caSolde").classList.toggle("negative", !!acc && acc.solde < 0);
     $("#caSoldeSub").textContent = acc
-      ? `Départ ${money(acc.base)} le ${dateTime(acc.at)} • +${money(acc.entrees)} ventes • −${money(acc.sorties)} achats usine et dépenses`
+      ? `Départ ${money(acc.base)} le ${dateTime(acc.at)} • +${money(acc.entrees)} ventes • −${money(acc.sorties)} achats usine, dépenses et taxes payées${tx.montant ? ` • taxe de la semaine (${money(tx.montant)}) retirée à la clôture` : ""}`
       : "Indiquez le montant actuel du compte pour partir sur la bonne base.";
     $("#soldeBtn").textContent = acc ? "Recaler le solde" : "Définir le solde";
     $("#soldeBtn").classList.toggle("hidden", !can("ca.cloturer"));
@@ -574,7 +578,7 @@ function renderCA() {
     <details class="archive">
       <summary><span><b>Du ${dateLabel(a.period_start)} au ${dateLabel(a.period_end)}</b><small>Clôturée par ${esc(userName(a.reset_by))} • ${a.details.count} opération(s)</small></span><strong>${money(a.total)}</strong></summary>
       <div class="archive-body">
-        <p class="muted small">Ventes : ${money(a.details.ventes)}${a.details.achats !== undefined ? ` • Achats usine : ${money(a.details.achats)}` : ""}${a.details.depenses !== undefined ? ` • Dépenses : ${money(a.details.depenses)} • <b>Bénéfice : ${money(a.details.benefice)}</b>` : ""}</p>
+        <p class="muted small">Ventes : ${money(a.details.ventes)}${a.details.achats !== undefined ? ` • Achats usine : ${money(a.details.achats)}` : ""}${a.details.depenses !== undefined ? ` • Dépenses : ${money(a.details.depenses)}${a.details.taxe?.montant ? ` • Taxe de l'État : ${money(a.details.taxe.montant)}` : ""} • <b>Bénéfice : ${money(a.details.beneficeNet ?? a.details.benefice)}</b>` : ""}</p>
         ${a.details.paie ? `<p class="muted small">${a.details.paie.best?.length ? `🏆 Meilleur vendeur : <b>${esc(a.details.paie.best.map(userName).join(" & "))}</b> (prime ${money(a.details.paie.prime)}) • ` : ""}Salaires et primes : <b>${money(a.details.paie.totalAVerser)}</b></p>` : ""}
         ${(a.details.employees || []).map((e) => { const p = a.details.paie?.rows?.find((x) => x.agent === e.agent); return `<div class="archive-row"><span>${esc(userName(e.agent))}${p?.prime ? " 🏆" : ""}</span><span>${e.count} op.</span><b>${money(e.total)}</b>${p ? `<span class="arch-pay">payé ${money(p.aVerser)}</span>` : ""}</div>`; }).join("") || `<p class="muted small">Aucune opération sur cette période.</p>`}
         ${can("ca.cloturer") ? `<button class="mini-btn danger" data-archive-delete="${a.id}">Supprimer cet historique</button>` : ""}
@@ -983,6 +987,8 @@ function openObjectives() {
   f.salaire_max.value = state.ca?.paie?.max ?? 250000;
   f.prime_meilleur.value = state.ca?.paie?.prime ?? 50000;
   f.cout_usine_pct.value = state.ca?.coutUsinePct ?? 50;
+  f.taxe_pct.value = state.ca?.taxe?.pct ?? 0;
+  f.taxe_base.value = state.ca?.taxe?.base || "benefice";
   $("#objectivesError").textContent = "";
   openModal("objectivesModal");
   setTimeout(() => f.entreprise.focus(), 40);
@@ -994,7 +1000,7 @@ async function saveObjectives(e) {
   const btn = f.querySelector("button[type=submit]");
   setBusy(btn, true, "Enregistrement…");
   try {
-    await api("ca/objectifs", { method: "POST", body: { entreprise: Number(f.entreprise.value) || 0, employe: Number(f.employe.value) || 0, salaire_max: Number(f.salaire_max.value) || 0, prime_meilleur: Number(f.prime_meilleur.value) || 0, cout_usine_pct: f.cout_usine_pct.value === "" ? 50 : Number(f.cout_usine_pct.value) } });
+    await api("ca/objectifs", { method: "POST", body: { entreprise: Number(f.entreprise.value) || 0, employe: Number(f.employe.value) || 0, salaire_max: Number(f.salaire_max.value) || 0, prime_meilleur: Number(f.prime_meilleur.value) || 0, cout_usine_pct: f.cout_usine_pct.value === "" ? 50 : Number(f.cout_usine_pct.value), taxe_pct: Number(f.taxe_pct.value) || 0, taxe_base: f.taxe_base.value } });
     closeModal("objectivesModal");
     toast("Objectifs enregistrés.");
     await loadAll();
@@ -1008,8 +1014,8 @@ function renderCAChart() {
   const ca = state.ca;
   const panel = $("#caChartPanel");
   if (!ca.archives) { panel.classList.add("hidden"); return; }
-  const weeks = ca.archives.slice(0, 11).reverse().map((a) => ({ label: dateLabel(a.period_end).replace(/ \d{4}$/, ""), value: a.total, tip: `Du ${dateLabel(a.period_start)} au ${dateLabel(a.period_end)}`, benefice: a.details?.benefice }));
-  weeks.push({ label: "En cours", value: ca.total, tip: "Semaine en cours", current: true, benefice: ca.benefice });
+  const weeks = ca.archives.slice(0, 11).reverse().map((a) => ({ label: dateLabel(a.period_end).replace(/ \d{4}$/, ""), value: a.total, tip: `Du ${dateLabel(a.period_start)} au ${dateLabel(a.period_end)}`, benefice: a.details?.beneficeNet ?? a.details?.benefice }));
+  weeks.push({ label: "En cours", value: ca.total, tip: "Semaine en cours", current: true, benefice: ca.beneficeNet ?? ca.benefice });
   panel.classList.remove("hidden");
   if (weeks.length < 2) {
     $("#caChart").innerHTML = `<div class="empty-state">Le graphique apparaîtra après la première clôture de semaine.</div>`;
