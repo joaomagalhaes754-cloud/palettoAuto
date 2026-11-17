@@ -222,6 +222,19 @@ async function init(db) {
   try { await db.prepare("ALTER TABLE d8_catalog ADD COLUMN categorie TEXT NOT NULL DEFAULT ''").run(); } catch { /* déjà présente */ }
   try { await db.prepare("ALTER TABLE d8_catalog ADD COLUMN public INTEGER NOT NULL DEFAULT 1").run(); } catch { /* déjà présente */ }
   try { await db.prepare("ALTER TABLE d8_catalog ADD COLUMN description TEXT NOT NULL DEFAULT ''").run(); } catch { /* déjà présente */ }
+  // Une seule fois : les remises des partenaires passent en « % tablette » (100 % en jeu = 40 % réel), donc réel × 2,5.
+  if (!(await db.prepare("SELECT 1 AS x FROM d8_settings WHERE key = 'remise_tablette_migree'").first())) {
+    const { results } = await db.prepare("SELECT id, data FROM d8_records WHERE type IN ('partenariats', 'ventes')").all();
+    const stmts = [];
+    for (const r of results) {
+      const d = JSON.parse(r.data);
+      if (!d.remise) continue;
+      d.remise = Math.min(100, Math.round(d.remise * 2.5 * 10) / 10);
+      stmts.push(db.prepare("UPDATE d8_records SET data = ? WHERE id = ?").bind(JSON.stringify(d), r.id));
+    }
+    stmts.push(db.prepare("INSERT INTO d8_settings (key, value) VALUES ('remise_tablette_migree', '1') ON CONFLICT(key) DO NOTHING"));
+    for (let i = 0; i < stmts.length; i += 90) await db.batch(stmts.slice(i, i + 90));
+  }
   // Grades par défaut, créés une seule fois
   if (!(await db.prepare("SELECT COUNT(*) AS n FROM d8_grades").first()).n) {
     await db.batch(DEFAULT_GRADES.map(([name, perms], i) =>
@@ -514,7 +527,7 @@ async function records(db, me, method, type, id, body, sub) {
       catch (e) { await db.prepare("DELETE FROM d8_records WHERE id = ?").bind(newId).run(); throw e; }
     }
     const row = await db.prepare("SELECT r.*, p.updated_at AS photo_at FROM d8_records r LEFT JOIN d8_recphotos p ON p.record_id = r.id WHERE r.id = ?").bind(newId).first();
-    await logAction(db, me, "création", TYPE_LABEL[type], recordLabel(type, r.data), (spec.amount ? fmt$(r.amount) + (r.data.partenariat ? ` • partenaire ${r.data.partenariat} (−${r.data.remise || 0} %)` : "") : "") + (photo ? " • capture jointe" : ""));
+    await logAction(db, me, "création", TYPE_LABEL[type], recordLabel(type, r.data), (spec.amount ? fmt$(r.amount) + (r.data.partenariat ? ` • partenaire ${r.data.partenariat} (−${r.data.remise || 0} % tablette)` : "") : "") + (photo ? " • capture jointe" : ""));
     return json(parseRow(row), 201);
   }
 
@@ -628,7 +641,8 @@ async function ca(db, me, method, sub, id, body = {}) {
     const mine = b.employees.find((e) => e.agent === me.username) || { agent: me.username, count: 0, total: 0, ventes: 0, locations: 0 };
     const obj = async (k) => Number((await db.prepare("SELECT value FROM d8_settings WHERE key = ?").bind(k).first())?.value || 0);
     const out = { since, total: b.total, ventes: b.ventes, locations: b.locations, count: b.count, mine,
-      objectifs: { entreprise: await obj("objectif_entreprise"), employe: await obj("objectif_employe") }, coutUsinePct: await getFactoryPct(db) };
+      objectifs: { entreprise: await obj("objectif_entreprise"), employe: await obj("objectif_employe") }, coutUsinePct: await getFactoryPct(db),
+      ratioTablette: (await db.prepare("SELECT value FROM d8_settings WHERE key = 'ratio_tablette'").first())?.value != null ? await obj("ratio_tablette") : 40 };
     const pay = await payroll(db, b);
     out.paie = { max: pay.max, prime: pay.prime, objectif: pay.objectif, best: pay.best,
       mine: pay.rows.find((r) => r.agent === me.username) || null,
@@ -666,6 +680,11 @@ async function ca(db, me, method, sub, id, body = {}) {
     const pairs = [["objectif_entreprise", ent], ["objectif_employe", emp]];
     if (body.salaire_max !== undefined) pairs.push(["salaire_max", cleanMoney(body.salaire_max)]);
     if (body.prime_meilleur !== undefined) pairs.push(["prime_meilleur", cleanMoney(body.prime_meilleur)]);
+    if (body.ratio_tablette !== undefined) {
+      const rt = Number(body.ratio_tablette);
+      if (!Number.isFinite(rt) || rt <= 0 || rt > 100) fail(400, "L'équivalence de la tablette doit être un pourcentage entre 1 et 100.");
+      pairs.push(["ratio_tablette", Math.round(rt * 10) / 10]);
+    }
     if (body.taxe_pct !== undefined) {
       const t = Number(body.taxe_pct);
       if (!Number.isFinite(t) || t < 0 || t > 100) fail(400, "La taxe de l'État doit être un pourcentage entre 0 et 100.");

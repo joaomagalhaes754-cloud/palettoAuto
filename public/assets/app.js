@@ -41,7 +41,7 @@ const TYPES = {
       { key: "agent", label: "Vendeur responsable", type: "user" },
     ],
     title: (d) => d.vehicule || d.bien, amount: "prix",
-    sub: (d) => [d.client && `Client : ${d.client}`, d.partenariat && `Partenaire : ${d.partenariat}${d.remise ? ` (−${d.remise} %)` : ""}`].filter(Boolean).join(" • "),
+    sub: (d) => [d.client && `Client : ${d.client}`, d.partenariat && `Partenaire : ${d.partenariat}${d.remise ? ` (−${d.remise} % tablette)` : ""}`].filter(Boolean).join(" • "),
   },
   clients: {
     label: "Clients", singular: "client", kicker: "PORTEFEUILLE",
@@ -58,12 +58,12 @@ const TYPES = {
   },
   partenariats: {
     label: "Partenariats", singular: "partenariat", kicker: "RELATIONS PROFESSIONNELLES",
-    desc: "Centralisez les accords professionnels de l'agence. La remise indiquée s'applique automatiquement aux ventes liées au partenariat.",
+    desc: "Centralisez les accords professionnels de la concession. Indiquez la remise telle qu'elle est saisie sur la tablette en jeu : le site la convertit (100 % tablette = 40 % réel) et l'applique automatiquement aux ventes liées au partenariat.",
     fields: [
       { key: "organisation", label: "Organisation", type: "text", required: true, placeholder: "ex. Benny's Motorworks" },
       { key: "contact", label: "Personne de contact", type: "text", placeholder: "Nom et téléphone" },
       { key: "type", label: "Type de partenariat", type: "text", placeholder: "ex. Remise, apport d'affaires…" },
-      { key: "remise", label: "Remise accordée (%)", type: "percent" },
+      { key: "remise", label: "Remise sur la tablette (% en jeu)", type: "percent", placeholder: "ex. 25" },
       { key: "notes", label: "Notes", type: "long", placeholder: "Termes de l'accord…" },
     ],
     title: (d) => d.organisation,
@@ -376,7 +376,7 @@ function renderRecords() {
   $("#recordsList").innerHTML = filtered.length ? filtered.map((x) => {
     const sub = def.sub(x.data) + (t === "clients" ? (linkedCount(x.data.nom) ? ` • ${linkedCount(x.data.nom)}` : "") : "");
     return `<article class="record-card" data-open="${t}:${x.id}" tabindex="0">
-      <div class="record-main"><div class="record-title"><b>${esc(def.title(x.data))}</b>${x.data.remise && t === "partenariats" ? `<span class="badge ok">Remise ${esc(x.data.remise)} %</span>` : ""}${x.data.liste_noire && t === "clients" ? `<span class="badge bad">⚠ Liste noire</span>` : ""}${def.photo ? (x.photo_at ? `<span class="badge ok">📷 Capture</span>` : `<span class="badge bad">Capture manquante</span>`) : ""}</div><p>${esc(sub || "Aucun détail")}</p></div>
+      <div class="record-main"><div class="record-title"><b>${esc(def.title(x.data))}</b>${x.data.remise && t === "partenariats" ? `<span class="badge ok">Remise ${esc(x.data.remise)} % tablette (${realPct(x.data.remise)} % réel)</span>` : ""}${x.data.liste_noire && t === "clients" ? `<span class="badge bad">⚠ Liste noire</span>` : ""}${def.photo ? (x.photo_at ? `<span class="badge ok">📷 Capture</span>` : `<span class="badge bad">Capture manquante</span>`) : ""}</div><p>${esc(sub || "Aucun détail")}</p></div>
       <div class="record-meta">
         ${def.amount ? `<strong class="amount">${money(x.data[def.amount])}</strong>` : ""}
         <span title="${hasAgent ? "Agent responsable" : "Créé par"}">${esc(userName(hasAgent ? x.agent : x.created_by))}</span>
@@ -405,7 +405,7 @@ function fieldHTML(f, val, ro, isNew = true) {
       return `<label>${lbl}<input name="${f.key}" type="number" min="0" max="100" step="0.5" inputmode="decimal" value="${val ? esc(val) : ""}" ${dis} placeholder="ex. 10"></label>`;
     case "partner": {
       const list = state.records.partenariats || [];
-      const opts = list.map((p) => `<option value="${esc(p.data.organisation)}" data-remise="${Number(p.data.remise) || 0}" ${p.data.organisation === val ? "selected" : ""}>${esc(p.data.organisation)} — ${p.data.remise ? `remise ${esc(p.data.remise)} %` : "sans remise"}</option>`);
+      const opts = list.map((p) => `<option value="${esc(p.data.organisation)}" data-remise="${Number(p.data.remise) || 0}" ${p.data.organisation === val ? "selected" : ""}>${esc(p.data.organisation)} — ${p.data.remise ? `remise ${esc(p.data.remise)} % tablette (${realPct(p.data.remise)} % réel)` : "sans remise"}</option>`);
       if (val && !list.some((p) => p.data.organisation === val)) opts.unshift(`<option value="${esc(val)}" data-remise="0" selected>${esc(val)} (ancien partenaire)</option>`);
       return `<label>${lbl}<select name="${f.key}" ${dis}><option value="" data-remise="0">— Aucun partenariat —</option>${opts.join("")}</select></label>`;
     }
@@ -988,6 +988,7 @@ function openObjectives() {
   f.prime_meilleur.value = state.ca?.paie?.prime ?? 50000;
   f.cout_usine_pct.value = state.ca?.coutUsinePct ?? 50;
   f.taxe_pct.value = state.ca?.taxe?.pct ?? 0;
+  f.ratio_tablette.value = state.ca?.ratioTablette ?? 40;
   f.taxe_base.value = state.ca?.taxe?.base || "benefice";
   $("#objectivesError").textContent = "";
   openModal("objectivesModal");
@@ -1000,7 +1001,7 @@ async function saveObjectives(e) {
   const btn = f.querySelector("button[type=submit]");
   setBusy(btn, true, "Enregistrement…");
   try {
-    await api("ca/objectifs", { method: "POST", body: { entreprise: Number(f.entreprise.value) || 0, employe: Number(f.employe.value) || 0, salaire_max: Number(f.salaire_max.value) || 0, prime_meilleur: Number(f.prime_meilleur.value) || 0, cout_usine_pct: f.cout_usine_pct.value === "" ? 50 : Number(f.cout_usine_pct.value), taxe_pct: Number(f.taxe_pct.value) || 0, taxe_base: f.taxe_base.value } });
+    await api("ca/objectifs", { method: "POST", body: { entreprise: Number(f.entreprise.value) || 0, employe: Number(f.employe.value) || 0, salaire_max: Number(f.salaire_max.value) || 0, prime_meilleur: Number(f.prime_meilleur.value) || 0, cout_usine_pct: f.cout_usine_pct.value === "" ? 50 : Number(f.cout_usine_pct.value), taxe_pct: Number(f.taxe_pct.value) || 0, taxe_base: f.taxe_base.value, ratio_tablette: Number(f.ratio_tablette.value) || 40 } });
     closeModal("objectivesModal");
     toast("Objectifs enregistrés.");
     await loadAll();
@@ -1704,6 +1705,9 @@ document.addEventListener("input", (e) => {
 });
 
 // Prix final = prix de base − remise du partenariat
+// Remise des partenaires saisie en « % tablette » (comme en jeu) ; 100 % sur la tablette = ratioTablette % réel (40 par défaut).
+const tabletRatio = () => (state.ca?.ratioTablette ?? 40) / 100;
+const realPct = (ig) => Math.round((Number(ig) || 0) * tabletRatio() * 10) / 10;
 function recalcSale(form) {
   const baseInput = form.querySelector("[name=prix_base]");
   const prix = form.querySelector("[name=prix]");
@@ -1714,9 +1718,9 @@ function recalcSale(form) {
   const baseHint = $('[data-money-for="prix_base"]');
   if (baseHint) baseHint.textContent = base ? money(base) : "";
   if (!base) return;
-  prix.value = Math.round(base * (1 - r / 100));
+  prix.value = Math.round(base * (1 - realPct(r) / 100));
   const hint = $('[data-money-for="prix"]');
-  if (hint) hint.textContent = r ? `${money(base)} − ${r} % (${p.value}) = ${money(prix.value)}` : money(prix.value);
+  if (hint) hint.textContent = r ? `${money(base)} − ${r} % tablette (${realPct(r)} % réel, ${p.value}) = ${money(prix.value)}` : money(prix.value);
 }
 
 function partnerSales(org) {
